@@ -6,7 +6,7 @@ require "http/client"
 require "base64"
 
 require "hana"
-require "rosetta"
+require "simpleidn"
 
 require "./json_schemer/version"
 require "./json_schemer/errors"

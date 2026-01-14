@@ -1,8 +1,3 @@
-require "uri/punycode"
-require "simpleidn"
-
-# require "icu" # Removed direct require since simpleidn handles it
-
 module JsonSchemer
   # Format validation module
   module Format
