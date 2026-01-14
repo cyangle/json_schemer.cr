@@ -1,0 +1,17 @@
+name: json_schemer
+version: 0.1.0
+
+authors:
+  - Chao Yang <cyang05@outlook.com>
+
+crystal: '>= 1.18.2'
+
+dependencies:
+  hana:
+    github: cyangle/hana.cr
+    version: '>= 0.1.0'
+  simpleidn:
+    github: cyangle/simpleidn.cr
+    version: '>= 0.2.1'
+
+license: MIT
