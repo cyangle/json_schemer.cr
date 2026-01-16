@@ -1,5 +1,31 @@
 module JsonSchemer
-  # Main Schema class for JSON Schema validation
+  # Main Schema class for JSON Schema validation.
+  #
+  # This class represents a compiled JSON Schema and provides methods for validating JSON instances against it.
+  #
+  # ### Usage
+  #
+  # ```
+  # require "json_schemer"
+  #
+  # # Create a schema
+  # schema = JsonSchemer.schema(%q({
+  #   "type": "object",
+  #   "required": ["name", "email"],
+  #   "properties": {
+  #     "name": {"type": "string", "minLength": 1},
+  #     "email": {"type": "string"},
+  #     "age": {"type": "integer", "minimum": 0}
+  #   }
+  # }))
+  #
+  # # Validate data
+  # valid_data = JSON.parse(%q({"name": "John", "email": "john@example.com", "age": 30}))
+  # schema.valid?(valid_data) # => true
+  #
+  # invalid_data = JSON.parse(%q({"name": "", "age": -5}))
+  # schema.valid?(invalid_data) # => false
+  # ```
   class Schema
     include Output
 
@@ -118,6 +144,26 @@ module JsonSchemer
     @regexp_resolver : Proc(String, Regex?)?
     @root_keyword_location : Location::Node?
 
+    # Initializes a new `Schema`.
+    #
+    # Generally, you should use `JsonSchemer.schema` instead of calling this directly.
+    #
+    # - `value`: The schema definition (JSON::Any, Hash, Bool, etc.).
+    # - `parent`: The parent schema or keyword (for context).
+    # - `root`: The root schema.
+    # - `keyword`: The keyword associated with this schema in the parent.
+    # - `configuration`: Configuration options.
+    # - `base_uri`: Base URI for resolving references.
+    # - `meta_schema`: Meta-schema to use.
+    # - `vocabulary`: Vocabulary configuration.
+    # - `format`: Enable format assertions (default: false).
+    # - `formats`: Custom format validators.
+    # - `content_encodings`: Custom content encoding validators.
+    # - `content_media_types`: Custom content media type validators.
+    # - `ref_resolver`: Resolver for external references.
+    # - `regexp_resolver`: Resolver for regex patterns.
+    # - `output_format`: Default output format.
+    # - `access_mode`: "read" or "write" mode.
     def initialize(
       value : JSON::Any | JSONHash | Bool,
       parent : Schema | Keyword | Nil = nil,
@@ -202,7 +248,15 @@ module JsonSchemer
       self
     end
 
-    # Validate an instance
+    # Validates an instance against the schema and returns true if valid.
+    #
+    # The instance can be a `JSON::Any`, `Hash`, `Array`, or primitive types.
+    #
+    # ```
+    # schema = JsonSchemer.schema(%q({"type": "integer"}))
+    # schema.valid?(10)   # => true
+    # schema.valid?("10") # => false
+    # ```
     def valid?(
       instance,
       resolve_enumerators : Bool? = nil,
@@ -216,7 +270,20 @@ module JsonSchemer
       )["valid"].as_bool
     end
 
-    # Validate and return results
+    # Validates an instance against the schema and returns the validation result.
+    #
+    # The structure of the result depends on the `output_format`.
+    #
+    # * "flag": `{"valid" => true/false}`
+    # * "basic": Includes a list of errors.
+    # * "classic": Detailed hierarchical error reporting (default).
+    #
+    # ```
+    # schema = JsonSchemer.schema(%q({"type": "integer"}))
+    # result = schema.validate("invalid")
+    # puts result["valid"]  # => false
+    # puts result["errors"] # => Array of errors
+    # ```
     def validate(
       instance,
       output_format : String? = nil,
@@ -338,7 +405,15 @@ module JsonSchemer
       @resources ||= {lexical: Resources.new, dynamic: Resources.new}
     end
 
-    # Resolve a $ref
+    # Resolves a reference from the current schema's context.
+    #
+    # The reference is resolved relative to the schema's base URI.
+    #
+    # ```
+    # # Given a schema at "http://example.com/schema.json"
+    # subschema = schema.ref("#/definitions/user")
+    # external_schema = schema.ref("other_schema.json")
+    # ```
     def ref(ref_value : String) : Schema
       root.resolve_ref(base_uri.resolve(URI.parse(ref_value)))
     end
@@ -433,6 +508,15 @@ module JsonSchemer
       regexp_resolver.call(pattern) || raise InvalidRegexpResolution.new(pattern)
     end
 
+    # Bundles the schema and its dependencies into a single JSON object.
+    #
+    # Resolves external references and embeds them into the schema using `$defs` (or `definitions`).
+    # This is useful for creating self-contained schemas.
+    #
+    # ```
+    # bundled_json = schema.bundle
+    # File.write("bundled.json", bundled_json.to_json)
+    # ```
     def bundle : JSON::Any
       return value unless value.as_h?
 

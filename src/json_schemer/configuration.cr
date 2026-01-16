@@ -1,24 +1,95 @@
 module JsonSchemer
-  # Configuration class for schema validation options
+  # Configuration class for schema validation options.
+  #
+  # This class holds all configuration options for schema validation, such as
+  # custom formats, ref resolvers, and output formats.
+  #
+  # You can modify the global configuration using `JsonSchemer.configure`:
+  #
+  # ```
+  # JsonSchemer.configure do |config|
+  #   config.output_format = "basic"
+  #   config.format = true
+  #   config.ref_resolver = "net/http"
+  # end
+  # ```
+  #
+  # Or pass options when creating a schema:
+  #
+  # ```
+  # schema = JsonSchemer.schema(
+  #   %q({"format": "email"}),
+  #   format: true,
+  #   output_format: "classic"
+  # )
+  # ```
   class Configuration
+    # Base URI for resolving relative references.
+    # Default is a generated URI `json-schemer://schema`.
     property base_uri : URI
+
+    # The meta-schema used for validating the schema itself.
+    # Default is `https://json-schema.org/draft/2020-12/schema`.
     property meta_schema : String | Schema
+
+    # Configuration for standard vocabularies.
     property vocabulary : Hash(String, Bool)?
+
+    # Enables format validation assertions (default: true).
+    # Note: The JSON Schema spec makes format annotation-only by default, but this option
+    # allows enabling assertion behavior.
     property format : Bool
+
+    # Custom format validators.
+    # Map of format name to validator proc.
+    #
+    # ```
+    # config.formats["even"] = ->(value : JSON::Any, format : String) {
+    #   value.as_i64? && value.as_i64.even?
+    # }
+    # ```
     property formats : Hash(String, Format::FormatValidator)
+
+    # Custom content encoding validators.
     property content_encodings : Hash(String, Content::ContentEncodingValidator)
+
+    # Custom content media type validators.
     property content_media_types : Hash(String, Content::ContentMediaTypeValidator)
+
+    # Custom keywords.
     property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Bool | Array(String)))
+
+    # Hooks to run before validating a property.
     property before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))
+
+    # Hooks to run after validating a property.
     property after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))
+
+    # Whether to insert default values (not fully implemented).
     property insert_property_defaults : Bool | Symbol
+
+    # Resolver for property defaults.
     property property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)?
+
+    # Resolver for external $refs.
+    # Can be a Proc or a String ("net/http").
     property ref_resolver : Proc(URI, JSONHash?) | String
+
+    # Resolver for regexp patterns ("ruby" or "ecma").
+    # Default is "ruby".
     property regexp_resolver : Proc(String, Regex?) | String
+
+    # Output format ("flag", "basic", "classic").
+    # Default is "classic".
     property output_format : String
+
+    # Whether to resolve enumerators.
     property resolve_enumerators : Bool
+
+    # Access mode ("read" or "write") for readOnly/writeOnly validation.
     property access_mode : String?
 
+    # Initializes a new Configuration instance with default values.
     def initialize(
       @base_uri : URI = URI.parse("json-schemer://schema"),
       @meta_schema : String | Schema = "https://json-schema.org/draft/2020-12/schema",

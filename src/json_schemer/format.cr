@@ -1,5 +1,8 @@
 module JsonSchemer
-  # Format validation module
+  # Module containing format validation logic.
+  #
+  # This module provides methods to validate strings against various formats
+  # defined in the JSON Schema specification, such as "date-time", "email", "ipv4", etc.
   module Format
     # Regex patterns
     DATE_TIME_OFFSET_REGEX      = /(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
@@ -38,7 +41,10 @@ module JsonSchemer
       end
     end
 
-    # Date-time validation (RFC 3339)
+    # Validates a date-time string according to RFC 3339.
+    #
+    # Checks for correct format `YYYY-MM-DDTHH:MM:SSZ` or with offset,
+    # valid ranges for date and time components, and handles leap seconds.
     def self.valid_date_time?(data : String) : Bool
       # Must match RFC 3339 format: YYYY-MM-DDTHH:MM:SS(.fraction)?(Z|+/-HH:MM)
       return false unless DATE_TIME_REGEX.matches?(data)
@@ -104,7 +110,10 @@ module JsonSchemer
       true
     end
 
-    # Date validation (RFC 3339 full-date)
+    # Validates a full-date string according to RFC 3339.
+    #
+    # Format: `YYYY-MM-DD`.
+    # Checks for valid year, month, and day, including leap years.
     def self.valid_date?(data : String) : Bool
       # Must match RFC 3339 date format exactly: YYYY-MM-DD
       return false unless DATE_REGEX.matches?(data)
@@ -138,7 +147,10 @@ module JsonSchemer
       (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
     end
 
-    # Time validation (RFC 3339 full-time)
+    # Validates a full-time string according to RFC 3339.
+    #
+    # Format: `HH:MM:SS` or with offset/Z.
+    # Checks for valid hour, minute, and second, including leap seconds.
     def self.valid_time?(data : String) : Bool
       # Must match RFC 3339 time format
       return false unless TIME_REGEX.matches?(data)
@@ -194,7 +206,9 @@ module JsonSchemer
       true
     end
 
-    # Duration validation (ISO 8601)
+    # Validates a duration string according to ISO 8601.
+    #
+    # Format examples: `P1Y2M3DT4H5M6S`, `P1W`.
     def self.valid_duration?(data : String) : Bool
       # Must only use ASCII digits
       return false unless data.ascii_only?
@@ -225,7 +239,7 @@ module JsonSchemer
       true
     end
 
-    # IP address validation
+    # Validates an IP address (IPv4 or IPv6).
     def self.valid_ip?(data : String, family : Socket::Family) : Bool
       begin
         addr = Socket::IPAddress.new(data, 0)
@@ -248,7 +262,7 @@ module JsonSchemer
     # Brackets are only allowed in the host portion for IPv6
     URI_BRACKET_IN_USERINFO = /\/\/[^\/@]*[\[\]][^\/@]*@/
 
-    # URI validation
+    # Validates a URI string according to RFC 3986.
     def self.valid_uri?(data : String) : Bool
       return false unless data.ascii_only?
       return false if URI_DISALLOWED_CHARS.matches?(data)
@@ -262,7 +276,7 @@ module JsonSchemer
       end
     end
 
-    # URI reference validation
+    # Validates a URI reference string (relative or absolute).
     def self.valid_uri_reference?(data : String) : Bool
       return false unless data.ascii_only?
       return false if URI_DISALLOWED_CHARS.matches?(data)
@@ -281,17 +295,20 @@ module JsonSchemer
       percent_encode(data, IRI_ESCAPE_REGEX)
     end
 
-    # JSON pointer validation
+    # Validates a JSON Pointer.
     def self.valid_json_pointer?(data : String) : Bool
       JSON_POINTER_REGEX.matches?(data)
     end
 
-    # Relative JSON pointer validation
+    # Validates a Relative JSON Pointer.
     def self.valid_relative_json_pointer?(data : String) : Bool
       RELATIVE_JSON_POINTER_REGEX.matches?(data)
     end
 
-    # Hostname validation (RFC 1123, RFC 5890)
+    # Validates a hostname.
+    #
+    # Checks for length limits, allowed characters, and structure (dot separation).
+    # Supports Punycode encoded internationalized domain names (IDN).
     def self.valid_hostname?(data : String) : Bool
       return false if data.empty?
       return false if data.size > 253
@@ -345,7 +362,9 @@ module JsonSchemer
       true
     end
 
-    # IDN Hostname validation
+    # Validates an internationalized hostname (IDN).
+    #
+    # Converts to ASCII (Punycode) and validates as a hostname.
     def self.valid_idn_hostname?(data : String) : Bool
       return false if data.empty?
 
@@ -357,7 +376,9 @@ module JsonSchemer
       valid_hostname?(ascii_domain)
     end
 
-    # Email validation (RFC 5321/5322 compliant)
+    # Validates an email address.
+    #
+    # Checks for local part and domain part requirements according to RFC 5321/5322.
     def self.valid_email?(data : String) : Bool
       return false unless data.ascii_only?
 
@@ -422,7 +443,9 @@ module JsonSchemer
       true
     end
 
-    # IDN Email validation (internationalized domain names)
+    # Validates an internationalized email address (IDN email).
+    #
+    # Allows Unicode characters in local part and domain part.
     def self.valid_idn_email?(data : String) : Bool
       # Find the @ separator (not in a quoted local part)
       local_part : String
@@ -479,17 +502,17 @@ module JsonSchemer
       true
     end
 
-    # UUID validation
+    # Validates a UUID.
     def self.valid_uuid?(data : String) : Bool
       UUID_REGEX.matches?(data) || data == NIL_UUID
     end
 
-    # URI template validation
+    # Validates a URI Template (RFC 6570).
     def self.valid_uri_template?(data : String) : Bool
       URI_TEMPLATE_REGEX.matches?(data)
     end
 
-    # Regex validation
+    # Validates a regular expression (ECMA-262).
     def self.valid_regex?(data : String) : Bool
       EcmaRegexp.valid?(data)
     end

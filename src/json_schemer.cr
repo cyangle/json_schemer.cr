@@ -51,18 +51,22 @@ module JsonSchemer
 
   WINDOWS_URI_PATH_REGEX = /\A\/[a-z]:/i
 
-  # Default ref resolver that raises for unknown refs
+  # Default ref resolver that raises `UnknownRef` for any external reference.
   DEFAULT_REF_RESOLVER = ->(uri : URI) : JSONHash? {
     raise UnknownRef.new(uri.to_s)
   }
 
-  # Net HTTP ref resolver
+  # Ref resolver that fetches schemas via HTTP(S).
+  #
+  # Uses `HTTP::Client` to fetch the content.
   NET_HTTP_REF_RESOLVER = ->(uri : URI) : JSONHash? {
     response = HTTP::Client.get(uri)
     JSONHash.from_json(response.body)
   }
 
-  # File URI ref resolver
+  # Ref resolver that reads schemas from the local filesystem.
+  #
+  # Expects `file://` URIs.
   FILE_URI_REF_RESOLVER = ->(uri : URI) : JSONHash? {
     raise InvalidFileURI.new("must use `file` scheme") unless uri.scheme == "file"
     raise InvalidFileURI.new("cannot have a host (use `file:///`)") if uri.host && !uri.host.not_nil!.empty?
@@ -71,17 +75,57 @@ module JsonSchemer
     JSONHash.from_json(File.read(URI.decode(path)))
   }
 
-  # Ruby regexp resolver
+  # Regexp resolver using Ruby/Crystal standard `Regex` (PCRE).
   RUBY_REGEXP_RESOLVER = ->(pattern : String) : Regex? {
     Regex.new(pattern)
   }
 
-  # ECMA regexp resolver
+  # Regexp resolver that converts ECMA-262 patterns to Crystal `Regex`.
+  #
+  # Uses `EcmaRegexp` for conversion.
   ECMA_REGEXP_RESOLVER = ->(pattern : String) : Regex? {
     Regex.new(EcmaRegexp.crystal_equivalent(pattern))
   }
 
-  # Module-level schema method
+  # Creates a new `Schema` instance from the given schema definition.
+  #
+  # The schema can be provided as a `String` (JSON), a `Hash` (already parsed JSON), or a `Path` (path to a schema file).
+  #
+  # ### Examples
+  #
+  # From a JSON string:
+  # ```
+  # schema = JsonSchemer.schema(%q({
+  #   "type": "object",
+  #   "properties": {
+  #     "age": {"type": "integer", "minimum": 0}
+  #   }
+  # }))
+  # ```
+  #
+  # From a Hash:
+  # ```
+  # schema = JsonSchemer.schema({
+  #   "type"      => JSON::Any.new("string"),
+  #   "minLength" => JSON::Any.new(5_i64),
+  # })
+  # ```
+  #
+  # From a file:
+  # ```
+  # schema = JsonSchemer.schema(Path.new("schemas/user.json"))
+  # ```
+  #
+  # ### Options
+  #
+  # * *base_uri*: The base URI for resolving relative references. Automatically set when loading from a `Path`.
+  # * *meta_schema*: The meta-schema to use for validation. Defaults to Draft 2020-12.
+  # * *ref_resolver*: A proc or string to resolve external `$ref`s. See `NET_HTTP_REF_RESOLVER` and `FILE_URI_REF_RESOLVER`.
+  # * *regexp_resolver*: "ecma" (for JS compatibility) or "ruby" (default).
+  # * *format*: If `true`, enables format validation (default is annotation-only).
+  # * *access_mode*: "read" or "write" to validation `readOnly`/`writeOnly` properties.
+  #
+  # See `Configuration` for more details on available options.
   def self.schema(
     schema : String | JSONHash | Path,
     base_uri : URI? = nil,
@@ -125,7 +169,14 @@ module JsonSchemer
     )
   end
 
-  # Validate if schema itself is valid
+  # Checks if the given schema definition is valid against its meta-schema.
+  #
+  # This is useful to verify that a schema is syntactically correct before using it.
+  #
+  # ```
+  # JsonSchemer.valid_schema?(%q({"type": "string"}))       # => true
+  # JsonSchemer.valid_schema?(%q({"type": "invalid_type"})) # => false
+  # ```
   def self.valid_schema?(
     schema : String | JSONHash | Path,
     base_uri : URI? = nil,
@@ -138,7 +189,14 @@ module JsonSchemer
     meta.valid?(resolved_schema)
   end
 
-  # Validate schema and return errors
+  # Validates the given schema definition against its meta-schema and returns the validation result.
+  #
+  # Returns a Hash containing the validation result. If the schema is invalid, detailed errors are provided.
+  #
+  # ```
+  # result = JsonSchemer.validate_schema(%q({"type": "invalid_type"}))
+  # result["valid"] # => false
+  # ```
   def self.validate_schema(
     schema : String | JSONHash | Path,
     base_uri : URI? = nil,
@@ -185,7 +243,20 @@ module JsonSchemer
     )
   end
 
-  # OpenAPI document handler
+  # Creates an `OpenAPI` handler for the given OpenAPI document.
+  #
+  # Supports OpenAPI 3.1 documents.
+  #
+  # ```
+  # document = JSON.parse(File.read("openapi.json")).as_h
+  # openapi = JsonSchemer.openapi(document)
+  #
+  # # Validate the document itself
+  # openapi.valid?
+  #
+  # # Get a schema component
+  # user_schema = openapi.schema("User")
+  # ```
   def self.openapi(document : JSONHash, **options) : OpenAPI
     OpenAPI.new(document, **options)
   end
@@ -195,6 +266,14 @@ module JsonSchemer
     @@configuration ||= Configuration.new
   end
 
+  # Configures global defaults for `JsonSchemer`.
+  #
+  # ```
+  # JsonSchemer.configure do |config|
+  #   config.output_format = "basic"
+  #   config.format = true
+  # end
+  # ```
   def self.configure(&)
     yield configuration
   end

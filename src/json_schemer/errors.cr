@@ -1,53 +1,53 @@
 module JsonSchemer
-  # Base error class
+  # Base error class for all JsonSchemer errors.
   class Error < Exception
   end
 
-  # Unsupported OpenAPI version
+  # Raised when an unsupported OpenAPI version is encountered.
   class UnsupportedOpenAPIVersion < Error
   end
 
-  # Unknown $ref
+  # Raised when a `$ref` cannot be resolved.
   class UnknownRef < Error
   end
 
-  # Unknown format
+  # Raised when an unknown format is encountered during validation.
   class UnknownFormat < Error
   end
 
-  # Unknown vocabulary
+  # Raised when an unknown vocabulary is encountered.
   class UnknownVocabulary < Error
   end
 
-  # Unknown content encoding
+  # Raised when an unknown content encoding is encountered.
   class UnknownContentEncoding < Error
   end
 
-  # Unknown content media type
+  # Raised when an unknown content media type is encountered.
   class UnknownContentMediaType < Error
   end
 
-  # Unknown output format
+  # Raised when an unknown output format is specified.
   class UnknownOutputFormat < Error
   end
 
-  # Invalid ref resolution
+  # Raised when a reference cannot be resolved.
   class InvalidRefResolution < Error
   end
 
-  # Invalid ref pointer
+  # Raised when a JSON pointer in a reference is invalid.
   class InvalidRefPointer < Error
   end
 
-  # Invalid regexp resolution
+  # Raised when a regular expression cannot be resolved or compiled.
   class InvalidRegexpResolution < Error
   end
 
-  # Invalid file URI
+  # Raised when a file URI is invalid.
   class InvalidFileURI < Error
   end
 
-  # Invalid ECMA regexp
+  # Raised when an ECMA regular expression is invalid or incompatible.
   class InvalidEcmaRegexp < Error
   end
 

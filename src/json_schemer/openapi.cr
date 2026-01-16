@@ -58,22 +58,49 @@ module JsonSchemer
       )
     end
 
-    # Check if document is valid
+    # Checks if the OpenAPI document itself is valid against the OpenAPI specification.
+    #
+    # ```
+    # openapi = JsonSchemer.openapi(document)
+    # if openapi.valid?
+    #   puts "OpenAPI document is valid"
+    # end
+    # ```
     def valid? : Bool
       @document_schema.valid?(JSON::Any.new(@document.transform_values { |v| v }))
     end
 
-    # Validate document
+    # Validates the OpenAPI document and returns the validation result.
+    #
+    # The result format is determined by `output_format` (default: "classic").
+    #
+    # ```
+    # result = openapi.validate
+    # unless result["valid"].as_bool
+    #   puts "Invalid OpenAPI document:"
+    #   puts result["errors"]
+    # end
+    # ```
     def validate(output_format : String = "classic") : Hash(String, JSON::Any)
       @document_schema.validate(JSON::Any.new(@document.transform_values { |v| v }), output_format: output_format)
     end
 
-    # Get schema by ref
+    # Resolves a reference URI within the OpenAPI document.
+    #
+    # ```
+    # user_schema = openapi.ref("#/components/schemas/User")
+    # ```
     def ref(value : String) : Schema
       @schema.ref(value)
     end
 
-    # Get component schema by name
+    # Retrieves a schema definition from `#/components/schemas`.
+    #
+    # Shortcut for `ref("#/components/schemas/#{name}")`.
+    #
+    # ```
+    # user_schema = openapi.schema("User")
+    # ```
     def schema(name : String) : Schema
       ref("#/components/schemas/#{name}")
     end
