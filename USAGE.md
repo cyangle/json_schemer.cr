@@ -379,6 +379,68 @@ schema.valid?(JSON::Any.new("valid"))    # => true
 schema.valid?(JSON::Any.new("invalid"))  # => false
 ```
 
+## Custom Error Messages
+
+Error messages can be customized using the `x-error` keyword.
+
+### `x-error` Keyword
+
+You can override all errors for a schema by providing a string:
+
+```crystal
+schema = JsonSchemer.schema(%q({
+  "type": "string",
+  "x-error": "custom error for schema and all keywords"
+}))
+
+result = schema.validate(JSON::Any.new(1_i64), output_format: "basic")
+# result["error"] => "custom error for schema and all keywords"
+```
+
+Or provide keyword-specific errors using a hash:
+
+```crystal
+schema = JsonSchemer.schema(%q({
+  "type": "string",
+  "minLength": 10,
+  "x-error": {
+    "minLength": "too short",
+    "^": "custom error for schema"
+  }
+}))
+
+# When minLength fails
+result = schema.validate(JSON::Any.new("short"), output_format: "basic")
+# result["error"] => "too short"
+
+# When type fails
+result = schema.validate(JSON::Any.new(1_i64), output_format: "basic")
+# result["error"] => "custom error for schema"
+```
+
+### Variable Interpolation
+
+The following variables are available for interpolation in error messages:
+
+- `%{instance}`: The value being validated (e.g., `"foo"`, `42`)
+- `%{instanceLocation}`: JSON pointer to the instance (e.g., `/properties/name`)
+- `%{formattedInstanceLocation}`: Formatted location (e.g., `` `/properties/name` ``)
+- `%{keywordValue}`: The value of the keyword (e.g., `10` for `minLength`)
+- `%{keywordLocation}`: JSON pointer to the keyword
+- `%{absoluteKeywordLocation}`: Absolute URI to the keyword
+- `%{details}`: Detailed error info hash
+
+```crystal
+schema = JsonSchemer.schema(%q({
+  "type": "integer",
+  "minimum": 18,
+  "x-error": "Value %{instance} must be at least %{keywordValue}"
+}))
+
+schema.validate(JSON::Any.new(10_i64), output_format: "basic")["error"]
+# => "Value 10 must be at least 18"
+```
+
 ## Pretty Error Formatting
 
 Use the `Errors.pretty` helper for human-readable error messages:

@@ -50,23 +50,23 @@ end
 describe "Performance" do
   it "runs simple benchmark" do
     puts "\n--- Simple Schema Benchmark ---"
-    
+
     schema_def = {
-      "type" => "object",
+      "type"       => "object",
       "properties" => {
         "firstName" => {"type" => "string"},
-        "lastName" => {"type" => "string"},
-        "age" => {"type" => "integer", "minimum" => 0}
+        "lastName"  => {"type" => "string"},
+        "age"       => {"type" => "integer", "minimum" => 0},
       },
-      "required" => ["firstName", "lastName"]
+      "required" => ["firstName", "lastName"],
     }
-    
+
     schema_json = schema_def.to_json
     schema = JsonSchemer.schema(schema_json)
-    
+
     valid_data = JSON.parse(%q({"firstName": "Jean-Luc", "lastName": "Picard", "age": 51}))
     invalid_data = JSON.parse(%q({"lastName": "Janeway", "age": 41.1}))
-    
+
     Benchmark.ips do |x|
       x.report("uninitialized, valid, basic") do
         JsonSchemer.schema(schema_json).validate(valid_data, output_format: "basic")
@@ -91,7 +91,7 @@ describe "Performance" do
       x.report("initialized, invalid, classic") do
         schema.validate(invalid_data, output_format: "classic")
       end
-      
+
       x.report("initialized, valid, flag") do
         schema.valid?(valid_data)
       end
@@ -100,24 +100,24 @@ describe "Performance" do
 
   it "runs test suite benchmark" do
     puts "\n--- Test Suite Benchmark (Draft 2020-12) ---"
-    
+
     test_suite_path = BenchmarkHelper::TEST_SUITE_PATH / "tests/draft2020-12"
     files = Dir.glob(test_suite_path / "**/*.json")
-    
+
     all_tests = [] of Tuple(JsonSchemer::Schema, JSON::Any, Bool)
     resolver = BenchmarkHelper::REF_RESOLVER.to_proc
     meta_schema = JsonSchemer.draft202012
-    
+
     print "Loading tests..."
     files.each do |file|
       next if BenchmarkHelper.skip_file?(File.basename(file))
-      
+
       content = File.read(file)
       test_group = JSON.parse(content).as_a
-      
+
       test_group.each do |group|
         schema_val = BenchmarkHelper.schema_value(group["schema"])
-        
+
         begin
           schema = JsonSchemer::Schema.new(
             schema_val,
@@ -126,10 +126,10 @@ describe "Performance" do
             ref_resolver: resolver,
             regexp_resolver: "ecma"
           )
-          
+
           # Force initialization of lazy properties if any
           # This helps benchmark pure validation speed
-          
+
           group["tests"].as_a.each do |test|
             data = test["data"]
             valid = test["valid"].as_bool
@@ -141,7 +141,7 @@ describe "Performance" do
       end
     end
     puts " Done. Loaded #{all_tests.size} tests."
-    
+
     Benchmark.ips do |x|
       x.report("test suite validation") do
         all_tests.each do |schema, data, expected|

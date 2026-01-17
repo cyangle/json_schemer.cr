@@ -59,7 +59,37 @@ module JsonSchemer
     # Get error message
     def error : String
       @error ||= begin
-        source.error(formatted_instance_location: formatted_instance_location, details: details)
+        custom_msg = source.x_error
+
+        if custom_msg
+          interpolate(custom_msg)
+        else
+          source.error(formatted_instance_location: formatted_instance_location, details: details)
+        end
+      end
+    end
+
+    private def interpolate(message : String) : String
+      context = {
+        "instance"                  => instance.raw.inspect,
+        "instanceLocation"          => resolved_instance_location,
+        "formattedInstanceLocation" => formatted_instance_location,
+        "keywordValue"              => source.value.raw.inspect,
+        "keywordLocation"           => resolved_keyword_location,
+        "absoluteKeywordLocation"   => source.absolute_keyword_location,
+        "details"                   => details.try(&.inspect) || "nil",
+      }
+
+      if d = details
+        d.each do |k, v|
+          context["details__#{k}"] = v.raw.inspect
+        end
+      end
+
+      begin
+        message % context
+      rescue
+        message
       end
     end
 

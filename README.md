@@ -308,7 +308,7 @@ schema.valid?(JSON.parse(%q({"password": "secret"}))) # => false (missing id)
 read_schema = JsonSchemer.schema(schema_hash, access_mode: "read")
 read_schema.valid?(JSON.parse(%q({"id": 1})))  # => true
 
-# Write mode: readOnly properties excluded from required  
+# Write mode: readOnly properties excluded from required
 write_schema = JsonSchemer.schema(schema_hash, access_mode: "write")
 write_schema.valid?(JSON.parse(%q({"password": "secret"})))  # => true
 ```

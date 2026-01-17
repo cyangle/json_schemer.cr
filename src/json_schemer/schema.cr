@@ -400,6 +400,15 @@ module JsonSchemer
       end
     end
 
+    # x-error support
+    def x_error : String?
+      parsed["x-error"]?.try do |xe|
+        if xe.is_a?(Keyword)
+          xe.as(Draft202012::Vocab::Core::XError).message(error_key)
+        end
+      end
+    end
+
     # Get resources
     def resources : NamedTuple(lexical: Resources, dynamic: Resources)
       @resources ||= {lexical: Resources.new, dynamic: Resources.new}
