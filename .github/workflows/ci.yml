@@ -24,7 +24,11 @@ jobs:
         run: crystal tool format --check
 
   test:
-    name: Tests
+    name: Tests (Crystal ${{ matrix.crystal }})
+    strategy:
+      fail-fast: false
+      matrix:
+        crystal: ["1.18", latest]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -34,6 +38,8 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: ${{ matrix.crystal }}
 
       - name: Install dependencies
         run: shards install
