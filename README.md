@@ -5,6 +5,11 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 [![Crystal Version](https://img.shields.io/badge/crystal-%3E%3D1.18.2-blue.svg)](https://crystal-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> [!CAUTION]
+> **Experimental Implementation:** This project is almost 100% vibe-coded.
+> While it passes an extensive suite of unit and third-party integration tests,
+> the internal logic may not follow traditional patterns. Use at your own risk.
+
 ## Features
 
 - **JSON Schema Draft 2020-12** compliant
