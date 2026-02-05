@@ -379,6 +379,106 @@ schema.valid?(JSON::Any.new("valid"))    # => true
 schema.valid?(JSON::Any.new("invalid"))  # => false
 ```
 
+> [!WARNING]
+> **Unhandled Exceptions:** Exceptions raised within custom format validators are **not caught** by the library and will propagate up to the caller. You should handle exceptions within your validator proc if you want to prevent them from crashing the validation process.
+
+## Custom Keywords
+
+You can add custom validation keywords using the `keywords` option. Each keyword validator receives the instance value, schema value, and JSON pointer, returning either `true` for valid or an array of error strings for invalid.
+
+```crystal
+schema = JsonSchemer.schema(
+  %q({
+    "type": "object",
+    "properties": {
+      "username": {
+        "type": "string",
+        "x-no-spaces": true
+      }
+    }
+  }),
+  keywords: {
+    "x-no-spaces" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+      if str = instance.as_s?
+        if str.includes?(' ')
+          ["value at #{pointer} must not contain spaces"] of String
+        else
+          true
+        end
+      else
+        true  # Non-strings pass this check
+      end
+    }
+  }
+)
+
+schema.valid?(JSON.parse(%q({"username": "john_doe"})))   # => true
+schema.valid?(JSON.parse(%q({"username": "john doe"})))   # => false
+```
+
+### Multiple Custom Keywords
+
+```crystal
+schema = JsonSchemer.schema(
+  %q({
+    "x-starts-with": "prefix_",
+    "x-ends-with": "_suffix"
+  }),
+  keywords: {
+    "x-starts-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+      prefix = schema.as_s
+      if str = instance.as_s?
+        str.starts_with?(prefix) ? true : ["must start with '#{prefix}'"] of String
+      else
+        true
+      end
+    },
+    "x-ends-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+      suffix = schema.as_s
+      if str = instance.as_s?
+        str.ends_with?(suffix) ? true : ["must end with '#{suffix}'"] of String
+      else
+        true
+      end
+    }
+  }
+)
+
+schema.valid?(JSON::Any.new("prefix_test_suffix"))  # => true
+schema.valid?(JSON::Any.new("test_suffix"))         # => false (missing prefix)
+schema.valid?(JSON::Any.new("prefix_test"))         # => false (missing suffix)
+```
+
+### Accessing Schema Values in Custom Keywords
+
+The schema value passed to your validator is the value of your custom keyword in the schema:
+
+```crystal
+schema = JsonSchemer.schema(
+  %q({
+    "x-range": {"min": 0, "max": 100}
+  }),
+  keywords: {
+    "x-range" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+      min = schema.as_h["min"].as_i
+      max = schema.as_h["max"].as_i
+      if num = instance.as_i64?
+        if num >= min && num <= max
+          true
+        else
+          ["must be between #{min} and #{max}"] of String
+        end
+      else
+        true
+      end
+    }
+  }
+)
+
+schema.valid?(JSON::Any.new(50_i64))   # => true
+schema.valid?(JSON::Any.new(150_i64))  # => false
+```
+
 ## Custom Error Messages
 
 Error messages can be customized using the `x-error` keyword.

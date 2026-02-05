@@ -254,7 +254,44 @@ module JsonSchemer
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            result(instance, instance_location, keyword_location, true, result_annotation: value)
+            # Check if there's a custom validator for this keyword
+            custom_validators = root.configuration.keywords
+            if custom_validator = custom_validators[keyword]?
+              # Call the custom validator: (instance, schema_value, pointer) -> Bool | Array(String)
+              pointer = Location.resolve(instance_location)
+              validator_result = custom_validator.call(instance, value, pointer)
+
+              case validator_result
+              when true
+                result(instance, instance_location, keyword_location, true, result_annotation: value)
+              when Array
+                # Array of error strings means validation failed
+                errors = validator_result.as(Array(String))
+                if errors.empty?
+                  result(instance, instance_location, keyword_location, true, result_annotation: value)
+                else
+                  result(instance, instance_location, keyword_location, false,
+                    type: keyword,
+                    details: {"errors" => JSON::Any.new(errors.map { |e| JSON::Any.new(e) })}
+                  )
+                end
+              else
+                # false or unexpected type means invalid
+                result(instance, instance_location, keyword_location, false, type: keyword)
+              end
+            else
+              # No custom validator - return valid with annotation (default behavior)
+              result(instance, instance_location, keyword_location, true, result_annotation: value)
+            end
+          end
+
+          def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
+            if details && (errors = details["errors"]?)
+              error_messages = errors.as_a.map(&.as_s).join("; ")
+              "custom keyword '#{keyword}' validation failed at #{formatted_instance_location}: #{error_messages}"
+            else
+              "custom keyword '#{keyword}' validation failed at #{formatted_instance_location}"
+            end
           end
         end
       end

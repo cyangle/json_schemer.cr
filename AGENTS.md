@@ -263,7 +263,7 @@ end
 
 ## Dependencies
 - **hana**: JSON Pointer implementation (github: cyangle/hana.cr, >= 0.1.0)
-- **simpleidn**: IDN/Punycode support for hostname validation (github: cyangle/simpleidn.cr, >= 0.2.1)
+- **simpleidn**: IDN/Punycode support for hostname validation (github: cyangle/simpleidn.cr, >= 0.4.1)
 - Crystal >= 1.18.2
 
 ## JSON Schema Test Suite Integration

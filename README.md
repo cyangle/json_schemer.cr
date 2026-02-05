@@ -16,6 +16,7 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 - **OpenAPI 3.1** schema validation support
 - Multiple output formats: `flag`, `basic`, `classic`
 - Custom format validators
+- Custom keyword validators
 - Custom ref resolvers (file, HTTP, custom)
 - ECMA-262 compatible regex patterns
 - `$ref`, `$anchor`, `$dynamicRef` / `$dynamicAnchor` support
@@ -74,6 +75,7 @@ See the full [Usage Guide](USAGE.md) for detailed examples including:
 - Conditional validation (`if`/`then`/`else`)
 - References (`$ref`, `$anchor`, `$dynamicRef`)
 - Format validation and custom format validators
+- Custom keyword validators
 - OpenAPI 3.1 support
 - Access modes (`readOnly`/`writeOnly`)
 - ECMA-262 regex compatibility
@@ -93,11 +95,14 @@ This section provides a complete reference for all configuration options availab
 | `formats` | `Hash(String, FormatValidator)?` | `{}` | Custom format validators |
 | `content_encodings` | `Hash(String, ContentEncodingValidator)?` | `{}` | Custom content encoding validators |
 | `content_media_types` | `Hash(String, ContentMediaTypeValidator)?` | `{}` | Custom content media type validators |
+| `keywords` | `Hash(String, Proc)?` | `{}` | Custom keyword validators |
 | `ref_resolver` | `Proc(URI, JSONHash?) \| String \| Nil` | Raises `UnknownRef` | Resolver for external `$ref` URIs |
 | `regexp_resolver` | `Proc(String, Regex?) \| String \| Nil` | `"ruby"` | Regex pattern resolver (`"ruby"` or `"ecma"`) |
 | `output_format` | `String?` | `"classic"` | Output format: `"flag"`, `"basic"`, or `"classic"` |
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
 | `insert_property_defaults` | `Bool \| Symbol` | `false` | Insert default values (annotation only) |
+| `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
+| `resolve_enumerators` | `Bool?` | `false` | Whether to resolve enumerators during validation |
 | `before_property_validation` | `Array(Proc)?` | `[]` | Hooks called before property validation |
 | `after_property_validation` | `Array(Proc)?` | `[]` | Hooks called after property validation |
 
@@ -346,6 +351,43 @@ schema.validate(data)
 data.as_h.has_key?("status")  # => false
 ```
 
+#### `keywords`
+
+Register custom keyword validators. Each validator receives the instance, schema value, and JSON pointer, returning `true` if valid or an array of error strings if invalid.
+
+```crystal
+schema = JsonSchemer.schema(
+  %q({
+    "type": "string",
+    "x-must-be-uppercase": true
+  }),
+  keywords: {
+    "x-must-be-uppercase" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+      if str = instance.as_s?
+        if str == str.upcase
+          true
+        else
+          ["value must be uppercase"] of String
+        end
+      else
+        true  # Non-strings pass this check
+      end
+    }
+  }
+)
+
+schema.valid?(JSON::Any.new("HELLO"))   # => true
+schema.valid?(JSON::Any.new("hello"))   # => false
+```
+
+#### `property_default_resolver`
+
+Custom resolver for property defaults. This advanced option allows control over how default values are resolved. **Note:** This option is accepted for API compatibility but is not fully implemented.
+
+#### `resolve_enumerators`
+
+When set to `true`, allows resolving enumerators during validation. Defaults to `false`. **Note:** This option is accepted for API compatibility but behavior may be limited.
+
 #### `before_property_validation` / `after_property_validation`
 
 Hooks that are called before and after each property is validated. Useful for logging, transformation, or side effects.
@@ -409,6 +451,9 @@ Some edge cases in internationalized hostname validation may differ due to UTS#4
 
 ### Property Defaults Insertion
 The `insert_property_defaults` option is accepted but default value insertion during validation is not fully implemented. The `default` keyword works as an annotation only.
+
+### Other API Compatibility Options
+The `property_default_resolver` and `resolve_enumerators` options are accepted for API compatibility but may have limited functionality.
 
 ## Development
 
