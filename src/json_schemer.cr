@@ -348,8 +348,8 @@ module JsonSchemer
     end
 
     # Register meta schemas for quick lookup
-  META_SCHEMA_CALLABLES_BY_BASE_URI_STR[DRAFT202012_ID] = -> { draft202012 }
-  META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OPENAPI31_DIALECT_ID] = -> { openapi31 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[DRAFT202012_ID] = -> { draft202012 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OPENAPI31_DIALECT_ID] = -> { openapi31 }
   end
 
   # Meta schema lookup

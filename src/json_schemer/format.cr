@@ -32,9 +32,9 @@ module JsonSchemer
     FRAGMENT_ENCODE_REGEX = /[^\w?\/:@\-.~!$&'()*+,;=]/
 
     # Validation constants
-    MAX_HOUR            = 23
-    MAX_MINUTE          = 59
-    LEAP_SECOND         = 60
+    MAX_HOUR            =  23
+    MAX_MINUTE          =  59
+    LEAP_SECOND         =  60
     MAX_HOSTNAME_LENGTH = 253
 
     # Format validator type
@@ -376,7 +376,7 @@ module JsonSchemer
       # Handle leap seconds (second = 60)
       if second == LEAP_SECOND
         # Leap seconds are only valid at 23:59 UTC
-        
+
         # Extract offset to determine if this could be a valid leap second
         if data.includes?("Z") || data.includes?("z")
           # UTC time: must be 23:59:60
@@ -435,7 +435,7 @@ module JsonSchemer
         local_part = data[0...at_index]
         domain_part = data[(at_index + 1)..]
       end
-      
+
       return nil if local_part.empty? || domain_part.empty?
       {local_part, domain_part}
     end

@@ -86,30 +86,30 @@ module JsonSchemer
       end
     end
 
-  protected def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-    value
-  end
-
-  # Helper: Parse value as an array of subschemas
-  # Used by: AllOf, AnyOf, OneOf, PrefixItems
-  protected def parse_subschema_array : Array(Schema)
-    value.as_a.map_with_index do |subschema_value, index|
-      subschema(subschema_value, index.to_s)
+    protected def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
+      value
     end
-  end
 
-  # Helper: Parse value as a hash of subschemas
-  # Used by: Properties, PatternProperties, DependentSchemas, $defs
-  protected def parse_subschema_hash : Hash(String, Schema)
-    result = {} of String => Schema
-    value.as_h.each do |key, subschema_value|
-      result[key] = subschema(subschema_value, key)
+    # Helper: Parse value as an array of subschemas
+    # Used by: AllOf, AnyOf, OneOf, PrefixItems
+    protected def parse_subschema_array : Array(Schema)
+      value.as_a.map_with_index do |subschema_value, index|
+        subschema(subschema_value, index.to_s)
+      end
     end
-    result
-  end
 
-  # Create a subschema from a value
-  protected def subschema(value : JSON::Any, kw : String? = nil) : Schema
+    # Helper: Parse value as a hash of subschemas
+    # Used by: Properties, PatternProperties, DependentSchemas, $defs
+    protected def parse_subschema_hash : Hash(String, Schema)
+      result = {} of String => Schema
+      value.as_h.each do |key, subschema_value|
+        result[key] = subschema(subschema_value, key)
+      end
+      result
+    end
+
+    # Create a subschema from a value
+    protected def subschema(value : JSON::Any, kw : String? = nil) : Schema
       Schema.new(
         value,
         self,
