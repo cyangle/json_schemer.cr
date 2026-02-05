@@ -23,6 +23,11 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 
 ## Installation
 
+**Prerequisites:** This shard depends on `simpleidn` which requires **ICU** (International Components for Unicode) to be installed on your system.
+- Ubuntu/Debian: `sudo apt-get install libicu-dev`
+- macOS: `brew install icu4c`
+- Alpine: `apk add icu-dev`
+
 1. Add the dependency to your `shard.yml`:
 
    ```yaml

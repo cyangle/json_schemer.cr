@@ -313,53 +313,11 @@ module JsonSchemer
       return false if data.empty?
       return false if data.size > 253
 
-      # Cannot start or end with dot
-      return false if data.starts_with?('.') || data.ends_with?('.')
+      # Check basic hostname syntax (LDH rule, dot separation, no leading/trailing hyphens)
+      return false unless HOSTNAME_REGEX.matches?(data)
 
-      # Split into labels
-      labels = data.split('.')
-      return false if labels.empty?
-
-      labels.each do |label|
-        return false if label.empty?
-        return false if label.size > 63
-
-        # Cannot start or end with hyphen
-        return false if label.starts_with?('-') || label.ends_with?('-')
-
-        # Cannot contain underscore
-        return false if label.includes?('_')
-
-        # Check for xn-- prefix (Punycode/A-label)
-        if label.downcase.starts_with?("xn--")
-          # Validate A-label using IDNA2008 (via SimpleIDN)
-          # Punycode itself is just an encoding, but "hostname" format implies valid IDN
-          return false unless SimpleIDN.to_ascii_2008(label)
-
-          punycode_part = label[4..]
-          return false if punycode_part.empty?
-          begin
-            decoded = URI::Punycode.decode(punycode_part)
-            # Labels cannot have -- in positions 3-4 unless they're xn-- labels (which are A-labels)
-            # But the *decoded* U-label MUST NOT contain -- in 3rd and 4th position (RFC 5890)
-            return false if decoded.size >= 4 && decoded[2] == '-' && decoded[3] == '-'
-          rescue
-            return false
-          end
-        elsif label.size >= 4 && label[2..3] == "--"
-          # Labels cannot have -- in positions 3-4 unless they're xn-- labels
-          return false
-        end
-
-        # Each character must be alphanumeric or hyphen
-        label.each_char do |c|
-          unless c.ascii_letter? || c.ascii_number? || c == '-'
-            return false
-          end
-        end
-      end
-
-      true
+      # Use SimpleIDN for full validation (length, hyphens, IDNA conformance)
+      !SimpleIDN.to_ascii(data).nil?
     end
 
     # Validates an internationalized hostname (IDN).
@@ -368,9 +326,9 @@ module JsonSchemer
     def self.valid_idn_hostname?(data : String) : Bool
       return false if data.empty?
 
-      # Use SimpleIDN with ICU support (to_ascii_2008)
+      # Use SimpleIDN with ICU support (to_ascii)
       # This performs full IDNA2008 validation including Bidi rules, ContextJ, etc.
-      ascii_domain = SimpleIDN.to_ascii_2008(data)
+      ascii_domain = SimpleIDN.to_ascii(data)
       return false if ascii_domain.nil?
 
       valid_hostname?(ascii_domain)
@@ -544,8 +502,7 @@ module JsonSchemer
     }
 
     HOSTNAME = ->(instance : JSON::Any, _format : String) {
-      s = instance.as_s?
-      !s || (s.ascii_only? && valid_hostname?(s))
+      !instance.as_s? || valid_hostname?(instance.as_s)
     }
 
     IDN_HOSTNAME = ->(instance : JSON::Any, _format : String) {
