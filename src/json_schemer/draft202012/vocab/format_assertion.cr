@@ -15,8 +15,12 @@ module JsonSchemer
             validator = root.fetch_format(format_name)
 
             if validator
-              valid = validator.call(instance, format_name)
-              result(instance, instance_location, keyword_location, valid, type: "format", result_annotation: value)
+              begin
+                valid = validator.call(instance, format_name)
+                result(instance, instance_location, keyword_location, valid, type: "format", result_annotation: value)
+              rescue ex : SimpleIDN::ConversionError
+                result(instance, instance_location, keyword_location, false, type: "format", details: {"error" => JSON::Any.new(ex.message)})
+              end
             else
               # Unknown format - pass by default
               result(instance, instance_location, keyword_location, true, result_annotation: value)

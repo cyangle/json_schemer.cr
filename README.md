@@ -151,6 +151,9 @@ schema.valid?(JSON::Any.new("invalid"))  # => false
 
 Register custom format validators. Each validator receives the value and format name, returning `true` if valid.
 
+> [!WARNING]
+> **Unhandled Exceptions:** Exceptions raised within custom format validators are **not caught** by the library and will propagate up to the caller. You should handle exceptions within your validator proc if you want to prevent them from crashing the validation process.
+
 ```crystal
 schema = JsonSchemer.schema(
   %q({"format": "even-number"}),

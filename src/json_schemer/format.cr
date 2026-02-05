@@ -309,6 +309,8 @@ module JsonSchemer
     #
     # Checks for length limits, allowed characters, and structure (dot separation).
     # Supports Punycode encoded internationalized domain names (IDN).
+    #
+    # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_hostname?(data : String) : Bool
       return false if data.empty?
       return false if data.size > 253
@@ -323,6 +325,8 @@ module JsonSchemer
     # Validates an internationalized hostname (IDN).
     #
     # Converts to ASCII (Punycode) and validates as a hostname.
+    #
+    # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_idn_hostname?(data : String) : Bool
       return false if data.empty?
 
