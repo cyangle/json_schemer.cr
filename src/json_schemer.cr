@@ -9,6 +9,7 @@ require "hana"
 require "simpleidn"
 
 require "./json_schemer/version"
+require "./json_schemer/constants"
 require "./json_schemer/errors"
 require "./json_schemer/location"
 require "./json_schemer/resources"
@@ -347,8 +348,8 @@ module JsonSchemer
     end
 
     # Register meta schemas for quick lookup
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR["https://json-schema.org/draft/2020-12/schema"] = -> { draft202012 }
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR["https://spec.openapis.org/oas/3.1/dialect/base"] = -> { openapi31 }
+  META_SCHEMA_CALLABLES_BY_BASE_URI_STR[DRAFT202012_ID] = -> { draft202012 }
+  META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OPENAPI31_DIALECT_ID] = -> { openapi31 }
   end
 
   # Meta schema lookup

@@ -1,6 +1,6 @@
 module JsonSchemer
   module Draft202012
-    BASE_URI = URI.parse("https://json-schema.org/draft/2020-12/schema")
+    BASE_URI = URI.parse(DRAFT202012_ID)
 
     FORMATS = {
       "date-time"             => Format::DATE_TIME,

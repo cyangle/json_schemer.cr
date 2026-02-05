@@ -1,6 +1,6 @@
 module JsonSchemer
   module OpenAPI31
-    BASE_URI = URI.parse("https://spec.openapis.org/oas/3.1/dialect/base")
+    BASE_URI = URI.parse(OPENAPI31_DIALECT_ID)
 
     FORMATS = {
       "int32" => ->(instance : JSON::Any, _format : String) {

@@ -146,7 +146,7 @@ module JsonSchemer
     end
 
     protected def collect_basic_errors(errors : Array(Hash(String, JSON::Any)))
-      if ignore_nested || nested.nil? || nested.not_nil!.empty?
+      if ignore_nested || nested.try(&.empty?) != false
         errors << to_output_unit
       else
         nested.not_nil!.each do |result|
@@ -159,7 +159,7 @@ module JsonSchemer
 
     # Detailed output format
     def detailed : Hash(String, JSON::Any)
-      return to_output_unit if ignore_nested || nested.nil? || nested.not_nil!.empty?
+      return to_output_unit if ignore_nested || nested.try(&.empty?) != false
 
       matching = nested.not_nil!.select { |r| r.valid == valid }
       if matching.size == 1
@@ -200,7 +200,7 @@ module JsonSchemer
 
     protected def collect_classic_errors(errors : Array(Hash(String, JSON::Any)))
       unless valid
-        if ignore_nested || nested.nil? || nested.not_nil!.empty?
+        if ignore_nested || nested.try(&.empty?) != false
           errors << to_classic
         else
           added = false
@@ -223,7 +223,7 @@ module JsonSchemer
     end
 
     private def collect_and_yield_classic(result : Result, &)
-      if result.ignore_nested || result.nested.nil? || result.nested.not_nil!.empty?
+      if result.ignore_nested || result.nested.try(&.empty?) != false
         yield result.to_classic
       else
         added = false

@@ -49,6 +49,7 @@ src/
     result.cr                  # Validation result structure
     output.cr                  # Output formatting module
     errors.cr                  # Error classes hierarchy
+    constants.cr               # Shared constants (URIs, etc.)
     configuration.cr           # Configuration options
     format.cr                  # Format validators (email, uri, etc.)
     content.cr                 # Content encoding/media type validators

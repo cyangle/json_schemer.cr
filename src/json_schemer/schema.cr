@@ -80,55 +80,16 @@ module JsonSchemer
     @configuration : Configuration?
     @parsed : Hash(String, Keyword)?
 
-    def base_uri : URI
-      @base_uri.not_nil!
-    end
-
-    def base_uri=(value : URI)
-      @base_uri = value
-    end
-
-    def meta_schema : Schema | String
-      @meta_schema.not_nil!
-    end
-
-    def meta_schema=(value : Schema | String)
-      @meta_schema = value
-    end
-
-    def keywords : Hash(String, Keyword.class)
-      @keywords.not_nil!
-    end
-
-    def keywords=(value : Hash(String, Keyword.class))
-      @keywords = value
-    end
-
-    def keyword_order : Hash(String, Int32)
-      @keyword_order.not_nil!
-    end
-
-    def keyword_order=(value : Hash(String, Int32))
-      @keyword_order = value
-    end
-
-    def value : JSON::Any
-      @value.not_nil!
-    end
+    property! base_uri : URI
+    property! meta_schema : Schema | String
+    property! keywords : Hash(String, Keyword.class)
+    property! keyword_order : Hash(String, Int32)
+    property! value : JSON::Any
+    property! root : Schema
+    property! configuration : Configuration
+    property! parsed : Hash(String, Keyword)
 
     getter parent : Schema | Keyword | Nil
-
-    def root : Schema
-      @root.not_nil!
-    end
-
-    def configuration : Configuration
-      @configuration.not_nil!
-    end
-
-    def parsed : Hash(String, Keyword)
-      @parsed.not_nil!
-    end
 
     @keyword : String = ""
 

@@ -9,9 +9,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            value.as_a.map_with_index do |subschema_value, index|
-              subschema(subschema_value, index.to_s)
-            end
+            parse_subschema_array
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -30,9 +28,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            value.as_a.map_with_index do |subschema_value, index|
-              subschema(subschema_value, index.to_s)
-            end
+            parse_subschema_array
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -51,9 +47,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            value.as_a.map_with_index do |subschema_value, index|
-              subschema(subschema_value, index.to_s)
-            end
+            parse_subschema_array
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -141,11 +135,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            result = {} of String => Schema
-            value.as_h.each do |key, subschema_value|
-              result[key] = subschema(subschema_value, key)
-            end
-            result
+            parse_subschema_hash
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -172,9 +162,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            value.as_a.map_with_index do |subschema_value, index|
-              subschema(subschema_value, index.to_s)
-            end
+            parse_subschema_array
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -244,10 +232,7 @@ module JsonSchemer
               contains_schema.validate_instance(item, join_location(instance_location, index.to_s), keyword_location, context)
             end
 
-            anno = [] of Int64
-            nested.each_with_index do |nested_result, index|
-              anno << index.to_i64 if nested_result.valid
-            end
+            anno = nested.each_with_index.compact_map { |r, i| i.to_i64 if r.valid }.to_a
 
             min_contains = schema.parsed["minContains"]?.try do |mc|
               if mc.is_a?(Keyword)
@@ -270,11 +255,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            result = {} of String => Schema
-            value.as_h.each do |property, subschema_value|
-              result[property] = subschema(subschema_value, property)
-            end
-            result
+            parse_subschema_hash
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -310,11 +291,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            result = {} of String => Schema
-            value.as_h.each do |pattern, subschema_value|
-              result[pattern] = subschema(subschema_value, pattern)
-            end
-            result
+            parse_subschema_hash
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -364,12 +341,12 @@ module JsonSchemer
 
             properties_result = context.adjacent_results[Properties]?
             if properties_result && properties_result.get_annotation
-              properties_result.get_annotation.not_nil!.as_a.each { |k| evaluated_keys << k.as_s }
+              evaluated_keys.concat(properties_result.get_annotation.not_nil!.as_a.map(&.as_s))
             end
 
             pattern_properties_result = context.adjacent_results[PatternProperties]?
             if pattern_properties_result && pattern_properties_result.get_annotation
-              pattern_properties_result.get_annotation.not_nil!.as_a.each { |k| evaluated_keys << k.as_s }
+              evaluated_keys.concat(pattern_properties_result.get_annotation.not_nil!.as_a.map(&.as_s))
             end
 
             additional_schema = parsed.as(Schema)

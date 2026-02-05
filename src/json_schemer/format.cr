@@ -31,6 +31,12 @@ module JsonSchemer
 
     FRAGMENT_ENCODE_REGEX = /[^\w?\/:@\-.~!$&'()*+,;=]/
 
+    # Validation constants
+    MAX_HOUR            = 23
+    MAX_MINUTE          = 59
+    LEAP_SECOND         = 60
+    MAX_HOSTNAME_LENGTH = 253
+
     # Format validator type
     alias FormatValidator = Proc(JSON::Any, String, Bool)
 
@@ -65,49 +71,10 @@ module JsonSchemer
       return false unless valid_date?(date_part)
 
       # Validate time ranges
-      return false if hour > 23
-      return false if minute > 59
+      return false if hour > MAX_HOUR
+      return false if minute > MAX_MINUTE
 
-      # Handle leap seconds (second = 60)
-      if second == 60
-        # Leap seconds are only valid at 23:59 UTC
-        # For local times with offset, check that when converted to UTC it would be 23:59
-        # For simplicity, we check that the local time is at hour 23 or with appropriate offset
-        # RFC 3339 says leap second is valid at 23:59:60Z or at equivalent local time
-        # We'll accept leap seconds at any hour 23 with minute 59, or at end of day with offset
-        # A stricter check: leap second must be at HH:59:60 where HH + offset = 23 UTC
-        # For simplicity in this implementation, we require minute == 59 and validate hour logic
-
-        # Extract offset to determine if this could be a valid leap second
-        if data.includes?("Z") || data.includes?("z")
-          # UTC time: must be 23:59:60
-          return false unless hour == 23 && minute == 59
-        else
-          # With offset, the local time must be such that UTC is 23:59
-          offset_match = data.match(/([\+\-])(\d{2}):(\d{2})\z/)
-          if offset_match
-            offset_sign = offset_match[1] == "+" ? 1 : -1
-            offset_hours = offset_match[2].to_i
-            offset_minutes = offset_match[3].to_i
-
-            # Calculate what UTC hour would be
-            # Local time - offset = UTC time
-            # So for +08:00, local 07:59:60 = UTC 23:59:60 (valid)
-            # For -08:00, local 31:59:60 would be needed which is impossible, so local 15:59:60 = UTC 23:59:60 (valid)
-            utc_hour = hour - (offset_sign * offset_hours)
-            utc_hour = (utc_hour + 24) % 24 if utc_hour < 0
-            utc_hour = utc_hour % 24 if utc_hour >= 24
-
-            return false unless utc_hour == 23 && minute == 59
-          else
-            return false
-          end
-        end
-      elsif second > 59
-        return false
-      end
-
-      true
+      valid_leap_second?(data, hour, minute, second)
     end
 
     # Validates a full-date string according to RFC 3339.
@@ -167,43 +134,7 @@ module JsonSchemer
       return false if hour > 23
       return false if minute > 59
 
-      # Handle leap seconds (second = 60)
-      if second == 60
-        # Leap seconds are valid at the end of UTC day (23:59:60Z)
-        # For times with offset, check if it would be 23:59 UTC
-        if data.includes?("Z") || data.includes?("z")
-          return false unless hour == 23 && minute == 59
-        else
-          offset_match = data.match(/([\+\-])(\d{2}):(\d{2})\z/)
-          if offset_match
-            offset_sign = offset_match[1] == "+" ? 1 : -1
-            offset_hours = offset_match[2].to_i
-            offset_minutes = offset_match[3].to_i
-
-            # Convert to total minutes for easier calculation
-            local_total_minutes = hour * 60 + minute
-            offset_total_minutes = offset_sign * (offset_hours * 60 + offset_minutes)
-
-            # UTC = local - offset
-            utc_total_minutes = local_total_minutes - offset_total_minutes
-
-            # Normalize to 0-1439 (minutes in a day)
-            utc_total_minutes = (utc_total_minutes + 1440) % 1440 if utc_total_minutes < 0
-            utc_total_minutes = utc_total_minutes % 1440 if utc_total_minutes >= 1440
-
-            utc_hour = utc_total_minutes // 60
-            utc_minute = utc_total_minutes % 60
-
-            return false unless utc_hour == 23 && utc_minute == 59
-          else
-            return false
-          end
-        end
-      elsif second > 59
-        return false
-      end
-
-      true
+      valid_leap_second?(data, hour, minute, second)
     end
 
     # Validates a duration string according to ISO 8601.
@@ -313,7 +244,7 @@ module JsonSchemer
     # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_hostname?(data : String) : Bool
       return false if data.empty?
-      return false if data.size > 253
+      return false if data.size > MAX_HOSTNAME_LENGTH
 
       # Check basic hostname syntax (LDH rule, dot separation, no leading/trailing hyphens)
       return false unless HOSTNAME_REGEX.matches?(data)
@@ -344,28 +275,9 @@ module JsonSchemer
     def self.valid_email?(data : String) : Bool
       return false unless data.ascii_only?
 
-      # Handle quoted local part specially - find the @ that's not in quotes
-      local_part : String
-      domain_part : String
-
-      if data.starts_with?('"')
-        # Quoted local part - find closing quote then @
-        closing_quote = data.index('"', 1)
-        return false unless closing_quote
-        return false unless closing_quote + 1 < data.size && data[closing_quote + 1] == '@'
-
-        local_part = data[0..closing_quote]
-        domain_part = data[(closing_quote + 2)..]
-      else
-        # Unquoted - simple split
-        at_index = data.index('@')
-        return false unless at_index
-
-        local_part = data[0...at_index]
-        domain_part = data[(at_index + 1)..]
-      end
-
-      return false if local_part.empty? || domain_part.empty?
+      parts = parse_email_parts(data)
+      return false unless parts
+      local_part, domain_part = parts
 
       # Validate local part
       if local_part.starts_with?('"') && local_part.ends_with?('"')
@@ -409,28 +321,9 @@ module JsonSchemer
     #
     # Allows Unicode characters in local part and domain part.
     def self.valid_idn_email?(data : String) : Bool
-      # Find the @ separator (not in a quoted local part)
-      local_part : String
-      domain_part : String
-
-      if data.starts_with?('"')
-        # Quoted local part - find closing quote then @
-        closing_quote = data.index('"', 1)
-        return false unless closing_quote
-        return false unless closing_quote + 1 < data.size && data[closing_quote + 1] == '@'
-
-        local_part = data[0..closing_quote]
-        domain_part = data[(closing_quote + 2)..]
-      else
-        # Unquoted - simple split at first @
-        at_index = data.index('@')
-        return false unless at_index
-
-        local_part = data[0...at_index]
-        domain_part = data[(at_index + 1)..]
-      end
-
-      return false if local_part.empty? || domain_part.empty?
+      parts = parse_email_parts(data)
+      return false unless parts
+      local_part, domain_part = parts
 
       # Validate local part - for IDN emails, allow Unicode letters in unquoted part
       if local_part.starts_with?('"') && local_part.ends_with?('"')
@@ -477,6 +370,74 @@ module JsonSchemer
     # Validates a regular expression (ECMA-262).
     def self.valid_regex?(data : String) : Bool
       EcmaRegexp.valid?(data)
+    end
+
+    private def self.valid_leap_second?(data : String, hour : Int32, minute : Int32, second : Int32) : Bool
+      # Handle leap seconds (second = 60)
+      if second == LEAP_SECOND
+        # Leap seconds are only valid at 23:59 UTC
+        
+        # Extract offset to determine if this could be a valid leap second
+        if data.includes?("Z") || data.includes?("z")
+          # UTC time: must be 23:59:60
+          return false unless hour == MAX_HOUR && minute == MAX_MINUTE
+        else
+          # With offset, the local time must be such that UTC is 23:59
+          offset_match = data.match(/([\+\-])(\d{2}):(\d{2})\z/)
+          if offset_match
+            offset_sign = offset_match[1] == "+" ? 1 : -1
+            offset_hours = offset_match[2].to_i
+            offset_minutes = offset_match[3].to_i
+
+            # Convert to total minutes for easier calculation
+            local_total_minutes = hour * 60 + minute
+            offset_total_minutes = offset_sign * (offset_hours * 60 + offset_minutes)
+
+            # UTC = local - offset
+            utc_total_minutes = local_total_minutes - offset_total_minutes
+
+            # Normalize to 0-1439 (minutes in a day)
+            utc_total_minutes = (utc_total_minutes + 1440) % 1440 if utc_total_minutes < 0
+            utc_total_minutes = utc_total_minutes % 1440 if utc_total_minutes >= 1440
+
+            utc_hour = utc_total_minutes // 60
+            utc_minute = utc_total_minutes % 60
+
+            return false unless utc_hour == MAX_HOUR && utc_minute == MAX_MINUTE
+          else
+            return false
+          end
+        end
+      elsif second > MAX_MINUTE
+        return false
+      end
+
+      true
+    end
+
+    private def self.parse_email_parts(data : String) : {String, String}?
+      local_part : String
+      domain_part : String
+
+      if data.starts_with?('"')
+        # Quoted local part - find closing quote then @
+        closing_quote = data.index('"', 1)
+        return nil unless closing_quote
+        return nil unless closing_quote + 1 < data.size && data[closing_quote + 1] == '@'
+
+        local_part = data[0..closing_quote]
+        domain_part = data[(closing_quote + 2)..]
+      else
+        # Unquoted - simple split
+        at_index = data.index('@')
+        return nil unless at_index
+
+        local_part = data[0...at_index]
+        domain_part = data[(at_index + 1)..]
+      end
+      
+      return nil if local_part.empty? || domain_part.empty?
+      {local_part, domain_part}
     end
 
     # Format validators as procs
