@@ -13,12 +13,14 @@ module JsonSchemaTestSuite
   REMOTES_PATH    = TEST_SUITE_PATH / "remotes"
 
   # Files to skip due to limitations
-  SKIP_FILES = Set{
-    # Contains integers too large for Crystal's JSON parser (Int64 overflow)
-    "bignum.json",
-    # References draft-2019-09 which is not implemented
-    "cross-draft.json",
-  }
+  SKIP_FILES = begin
+    files = ["bignum.json", "cross-draft.json"]
+    {% if !flag?(:with_simpleidn) %}
+      # IDN validation disabled
+      files.concat(["hostname.json", "idn-hostname.json", "idn-email.json"])
+    {% end %}
+    files.to_set
+  end
 
   # Ref resolver that loads remote schemas from the filesystem
   # Remote refs like http://localhost:1234/foo.json -> remotes/foo.json

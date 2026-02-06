@@ -44,5 +44,8 @@ jobs:
       - name: Install dependencies
         run: shards install
 
-      - name: Run tests
+      - name: Run tests (default)
         run: crystal spec
+
+      - name: Run tests (with simpleidn)
+        run: crystal spec -Dwith_simpleidn

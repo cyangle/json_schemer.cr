@@ -4,9 +4,12 @@ require "big"
 require "socket"
 require "http/client"
 require "base64"
+require "log"
 
 require "hana"
-require "simpleidn"
+{% if flag?(:with_simpleidn) %}
+  require "simpleidn"
+{% end %}
 
 require "./json_schemer/version"
 require "./json_schemer/constants"

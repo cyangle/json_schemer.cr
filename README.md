@@ -24,10 +24,7 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 
 ## Installation
 
-**Prerequisites:** This shard depends on `simpleidn` which requires **ICU** (International Components for Unicode) to be installed on your system.
-- Ubuntu/Debian: `sudo apt-get install libicu-dev`
-- macOS: `brew install icu4c`
-- Alpine: `apk add icu-dev`
+**Prerequisites:** This shard relies on `simpleidn` for full IDN hostname validation, which requires **ICU** (International Components for Unicode).
 
 1. Add the dependency to your `shard.yml`:
 
@@ -38,6 +35,22 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
    ```
 
 2. Run `shards install`
+
+### Optional IDN Support (Breaking Change in 0.4.0)
+
+By default, `simpleidn` support is **disabled** to avoid the hard dependency on `libicu`.
+- `hostname` and `email` format validation uses a naive implementation (regex/length checks only; no strict Punycode/IDN validation).
+- `idn-hostname` and `idn-email` format validation is disabled (logs a warning and always returns false).
+
+To enable strict IDN support (requires `libicu` installed on the system):
+1. Install ICU development headers:
+   - Ubuntu/Debian: `sudo apt-get install libicu-dev`
+   - macOS: `brew install icu4c`
+   - Alpine: `apk add icu-dev`
+2. Compile your project with the `-Dwith_simpleidn` flag:
+   ```bash
+   crystal build -Dwith_simpleidn src/your_app.cr
+   ```
 
 ## Quick Start
 
@@ -461,8 +474,11 @@ The `property_default_resolver` and `resolve_enumerators` options are accepted f
 # Install dependencies
 shards install
 
-# Run all tests
+# Run all tests (default: no simpleidn)
 crystal spec
+
+# Run all tests with simpleidn enabled (requires ICU)
+crystal spec -Dwith_simpleidn
 
 # Run specific test file
 crystal spec spec/json_schemer_spec.cr

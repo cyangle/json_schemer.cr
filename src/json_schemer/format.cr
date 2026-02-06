@@ -239,25 +239,35 @@ module JsonSchemer
     # Validates a hostname.
     #
     # Checks for length limits, allowed characters, and structure (dot separation).
-    # Supports Punycode encoded internationalized domain names (IDN).
+    # Supports Punycode encoded internationalized domain names (IDN) only when `with_simpleidn` flag is set.
     #
-    # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
+    # Raises `SimpleIDN::ConversionError` if an ICU system error occurs (when enabled).
     def self.valid_hostname?(data : String) : Bool
       # Hostname format requires ASCII-only string
       return false unless data.ascii_only?
 
-      # Use SimpleIDN's hostname validation
-      SimpleIDN.valid_hostname?(data)
+      {% if flag?(:with_simpleidn) %}
+        # Use SimpleIDN's hostname validation
+        SimpleIDN.valid_hostname?(data)
+      {% else %}
+        HOSTNAME_REGEX.matches?(data) && data.size <= MAX_HOSTNAME_LENGTH
+      {% end %}
     end
 
     # Validates an internationalized hostname (IDN).
     #
     # Converts to ASCII (Punycode) and validates as a hostname.
+    # Requires `with_simpleidn` flag to work.
     #
     # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_idn_hostname?(data : String) : Bool
-      # Use SimpleIDN's hostname validation
-      SimpleIDN.valid_hostname?(data)
+      {% if flag?(:with_simpleidn) %}
+        # Use SimpleIDN's hostname validation
+        SimpleIDN.valid_hostname?(data)
+      {% else %}
+        Log.warn { "IDN hostname validation skipped because `with_simpleidn` flag is not set, always invalid" }
+        false
+      {% end %}
     end
 
     # Validates an email address.

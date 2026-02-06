@@ -1,4 +1,6 @@
-require "simpleidn"
+{% if flag?(:with_simpleidn) %}
+  require "simpleidn"
+{% end %}
 require "spec"
 require "../src/json_schemer"
 

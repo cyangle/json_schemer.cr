@@ -132,10 +132,12 @@ describe "Format Validation" do
       schema.valid?(JSON::Any.new("P3Y6M4DT12H30M5S")).should be_true
     end
 
-    it "supports idn-email format" do
-      schema = JsonSchemer.schema(JSON.parse(%q({"format": "idn-email"})).as_h)
-      schema.valid?(JSON::Any.new("test@example.com")).should be_true
-    end
+    {% if flag?(:with_simpleidn) %}
+      it "supports idn-email format" do
+        schema = JsonSchemer.schema(JSON.parse(%q({"format": "idn-email"})).as_h)
+        schema.valid?(JSON::Any.new("test@example.com")).should be_true
+      end
+    {% end %}
 
     it "supports iri format" do
       schema = JsonSchemer.schema(JSON.parse(%q({"format": "iri"})).as_h)
