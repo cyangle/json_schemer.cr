@@ -246,8 +246,8 @@ module JsonSchemer
       # Hostname format requires ASCII-only string
       return false unless data.ascii_only?
 
-      # Use SimpleIDN's strict validation
-      SimpleIDN.valid_hostname?(data, strict: true)
+      # Use SimpleIDN's hostname validation
+      SimpleIDN.valid_hostname?(data)
     end
 
     # Validates an internationalized hostname (IDN).
@@ -256,8 +256,8 @@ module JsonSchemer
     #
     # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_idn_hostname?(data : String) : Bool
-      # Use SimpleIDN's strict validation
-      SimpleIDN.valid_hostname?(data, strict: true)
+      # Use SimpleIDN's hostname validation
+      SimpleIDN.valid_hostname?(data)
     end
 
     # Validates an email address.

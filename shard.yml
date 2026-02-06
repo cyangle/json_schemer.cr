@@ -1,5 +1,5 @@
 name: json_schemer
-version: 0.3.0
+version: 0.3.1
 
 authors:
   - Chao Yang <cyang05@outlook.com>
@@ -12,6 +12,6 @@ dependencies:
     version: '>= 0.1.0'
   simpleidn:
     github: cyangle/simpleidn.cr
-    version: '>= 0.7.0'
+    version: '>= 0.8.0'
 
 license: MIT
