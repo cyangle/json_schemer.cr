@@ -1,3 +1,4 @@
+require "simpleidn"
 require "spec"
 require "../src/json_schemer"
 

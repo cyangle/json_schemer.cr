@@ -243,14 +243,11 @@ module JsonSchemer
     #
     # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_hostname?(data : String) : Bool
-      return false if data.empty?
-      return false if data.size > MAX_HOSTNAME_LENGTH
+      # Hostname format requires ASCII-only string
+      return false unless data.ascii_only?
 
-      # Check basic hostname syntax (LDH rule, dot separation, no leading/trailing hyphens)
-      return false unless HOSTNAME_REGEX.matches?(data)
-
-      # Use SimpleIDN for full validation (length, hyphens, IDNA conformance)
-      !SimpleIDN.to_ascii(data).nil?
+      # Use SimpleIDN's strict validation
+      SimpleIDN.valid_hostname?(data, strict: true)
     end
 
     # Validates an internationalized hostname (IDN).
@@ -259,14 +256,8 @@ module JsonSchemer
     #
     # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_idn_hostname?(data : String) : Bool
-      return false if data.empty?
-
-      # Use SimpleIDN with ICU support (to_ascii)
-      # This performs full IDNA2008 validation including Bidi rules, ContextJ, etc.
-      ascii_domain = SimpleIDN.to_ascii(data)
-      return false if ascii_domain.nil?
-
-      valid_hostname?(ascii_domain)
+      # Use SimpleIDN's strict validation
+      SimpleIDN.valid_hostname?(data, strict: true)
     end
 
     # Validates an email address.
