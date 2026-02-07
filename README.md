@@ -37,22 +37,6 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 
 2. Run `shards install`
 
-### Optional IDN Support (Breaking Change in 0.4.0)
-
-By default, `simpleidn` support is **disabled** to avoid the hard dependency on `libicu`.
-- `hostname` and `email` format validation uses a naive implementation (regex/length checks only; no strict Punycode/IDN validation).
-- `idn-hostname` and `idn-email` format validation is disabled (logs a warning and always returns false).
-
-To enable strict IDN support (requires `libicu` installed on the system):
-1. Install ICU development headers:
-   - Ubuntu/Debian: `sudo apt-get install libicu-dev`
-   - macOS: `brew install icu4c`
-   - Alpine: `apk add icu-dev`
-2. Compile your project with the `-Dwith_simpleidn` flag:
-   ```bash
-   crystal build -Dwith_simpleidn src/your_app.cr
-   ```
-
 ## Quick Start
 
 ```crystal
@@ -93,6 +77,93 @@ See the full [Usage Guide](USAGE.md) for detailed examples including:
 - OpenAPI 3.1 support
 - Access modes (`readOnly`/`writeOnly`)
 - ECMA-262 regex compatibility
+
+## Advanced & Optional Features
+
+### 1. IDN Support (Syntax Validation)
+
+By default, `simpleidn` support is **disabled** to avoid a hard dependency on `libicu`.
+- `hostname` and `email` format validation uses a naive implementation (regex/length checks only; no strict Punycode/IDN validation).
+- `idn-hostname` and `idn-email` format validation is disabled (logs a warning and always returns false).
+
+To enable strict IDN syntax validation (requires `libicu` installed on the system):
+1. Install ICU development headers:
+   - Ubuntu/Debian: `sudo apt-get install libicu-dev`
+   - macOS: `brew install icu4c`
+   - Alpine: `apk add icu-dev`
+2. Compile your project with the `-Dwith_simpleidn` flag:
+   ```bash
+   crystal build -Dwith_simpleidn src/your_app.cr
+   ```
+
+### 2. DNS Hostname Validation (Existence Check)
+
+While `simpleidn` validates the **syntax** of a hostname, you can also use `DnsHostnameValidator` to check if the domain actually **exists** in the DNS.
+
+```crystal
+require "json_schemer"
+
+# Create a validator with DNS resolution enabled
+dns_validator = JsonSchemer::Format::DnsHostnameValidator.new(ttl: 10.minutes)
+
+schema = JsonSchemer.schema(
+  %q({"format": "hostname"}),
+  format: true,
+  formats: {"hostname" => dns_validator}
+)
+
+schema.valid?(JSON::Any.new("google.com"))  # => true
+schema.valid?(JSON::Any.new("non-existent-domain-12345.com"))  # => false
+```
+
+> [!IMPORTANT]
+> **Blocking DNS Lookups:** By default, Crystal's `Socket::Addrinfo` performs **blocking** DNS lookups.
+> For production environments, it is highly recommended to use the [**spider-gazelle/dns**](https://github.com/spider-gazelle/dns) shard for non-blocking resolution.
+>
+> Add `dns` to your `shard.yml` and require the monkey-patch:
+> ```crystal
+> require "dns/ext/addrinfo"
+> ```
+
+### 3. Chaining Multiple Validators
+
+Since the `formats` option only accepts one validator per format name, you can chain multiple checks by creating a wrapper validator that calls them in sequence.
+
+For example, to combine the built-in syntax validation with a custom internal domain check:
+
+```crystal
+# Define a chained validator
+chained_validator = ->(value : JSON::Any, format : String) {
+  # 1. First, call the built-in syntax validator
+  return false unless JsonSchemer::Format::HOSTNAME.call(value, format)
+  
+  # 2. Then, apply custom logic (e.g., must be a .com domain)
+  if hostname = value.as_s?
+    hostname.ends_with?(".com")
+  else
+    true # Let other keywords handle type validation
+  end
+}
+
+schema = JsonSchemer.schema(
+  %q({"format": "hostname"}),
+  format: true,
+  formats: {"hostname" => chained_validator}
+)
+```
+
+The `DnsHostnameValidator` already chains syntax validation automatically before performing DNS lookups. If you want to add even more logic on top of it:
+
+```crystal
+dns_validator = JsonSchemer::Format::DnsHostnameValidator.new
+
+combined = ->(value : JSON::Any, format : String) {
+  # Chain: Syntax -> DNS Lookup -> Custom Logic
+  dns_validator.call(value, format) && value.as_s.starts_with?("api-")
+}
+
+schema = JsonSchemer.schema(..., formats: {"hostname" => combined})
+```
 
 ## Configuration Reference
 

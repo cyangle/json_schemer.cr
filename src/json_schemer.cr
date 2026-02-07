@@ -139,7 +139,7 @@ module JsonSchemer
     formats : Hash(String, Format::FormatValidator)? = nil,
     content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
     content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
-    keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Bool | Array(String)))? = nil,
+    keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
     before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
     after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
     insert_property_defaults : Bool | Symbol = false,

@@ -257,9 +257,9 @@ module JsonSchemer
             # Check if there's a custom validator for this keyword
             custom_validators = root.configuration.keywords
             if custom_validator = custom_validators[keyword]?
-              # Call the custom validator: (instance, schema_value, pointer) -> Bool | Array(String)
+              # Call the custom validator: (instance, schema_value, pointer, keyword) -> Bool | Array(String)
               pointer = Location.resolve(instance_location)
-              validator_result = custom_validator.call(instance, value, pointer)
+              validator_result = custom_validator.call(instance, value, pointer, self)
 
               case validator_result
               when true

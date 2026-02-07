@@ -57,7 +57,7 @@ module JsonSchemer
     property content_media_types : Hash(String, Content::ContentMediaTypeValidator)
 
     # Custom keywords.
-    property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Bool | Array(String)))
+    property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))
 
     # Hooks to run before validating a property.
     property before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))
@@ -98,7 +98,7 @@ module JsonSchemer
       @formats : Hash(String, Format::FormatValidator) = {} of String => Format::FormatValidator,
       @content_encodings : Hash(String, Content::ContentEncodingValidator) = {} of String => Content::ContentEncodingValidator,
       @content_media_types : Hash(String, Content::ContentMediaTypeValidator) = {} of String => Content::ContentMediaTypeValidator,
-      @keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Bool | Array(String)),
+      @keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)),
       @before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil)) = [] of Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil),
       @after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil)) = [] of Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil),
       @insert_property_defaults : Bool | Symbol = false,

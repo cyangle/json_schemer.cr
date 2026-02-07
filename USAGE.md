@@ -401,7 +401,7 @@ schema = JsonSchemer.schema(
     }
   }),
   keywords: {
-    "x-no-spaces" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+    "x-no-spaces" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       if str = instance.as_s?
         if str.includes?(' ')
           ["value at #{pointer} must not contain spaces"] of String
@@ -419,6 +419,63 @@ schema.valid?(JSON.parse(%q({"username": "john_doe"})))   # => true
 schema.valid?(JSON.parse(%q({"username": "john doe"})))   # => false
 ```
 
+### Example: String-Backed Money Validation (with sibling constraints)
+
+This example demonstrates a custom keyword `x-money` that validates a string as a formatted currency value and also checks for `minimum` and `maximum` values defined in the same schema object.
+
+```crystal
+require "big"
+
+money_validator = ->(instance : JSON::Any, _schema_value : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
+  return true unless str = instance.as_s?
+
+  # 1. Format validation (e.g., $10.00 or 10.00)
+  unless str =~ /^\$?\d+\.\d{2}$/
+    return ["value at #{pointer} must be a valid money string (e.g., '10.99')"] of String
+  end
+
+  # 2. Precision validation and sibling check (minimum/maximum)
+  begin
+    amount = BigDecimal.new(str.delete('$'))
+    parent_schema = keyword.schema.value.as_h
+    errors = [] of String
+
+    if min = parent_schema["minimum"]?
+      min_amount = BigDecimal.new(min.raw.to_s.delete('$'))
+      errors << "amount must be >= #{min.raw}" if amount < min_amount
+    end
+
+    if max = parent_schema["maximum"]?
+      max_amount = BigDecimal.new(max.raw.to_s.delete('$'))
+      errors << "amount must be <= #{max.raw}" if amount > max_amount
+    end
+
+    errors.empty? ? true : errors
+  rescue
+    ["value at #{pointer} is not a valid numeric amount"] of String
+  end
+}
+
+schema = JsonSchemer.schema(
+  %q({
+    "type": "object",
+    "properties": {
+      "price": {
+        "type": "string",
+        "x-money": true,
+        "minimum": 10.00,
+        "maximum": "$100.00"
+      }
+    }
+  }),
+  keywords: { "x-money" => money_validator }
+)
+
+schema.valid?(JSON.parse(%q({"price": "19.95"})))  # => true
+schema.valid?(JSON.parse(%q({"price": "5.00"})))   # => false (too small)
+schema.valid?(JSON.parse(%q({"price": "150.00"}))) # => false (too large)
+```
+
 ### Multiple Custom Keywords
 
 ```crystal
@@ -428,7 +485,7 @@ schema = JsonSchemer.schema(
     "x-ends-with": "_suffix"
   }),
   keywords: {
-    "x-starts-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+    "x-starts-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       prefix = schema.as_s
       if str = instance.as_s?
         str.starts_with?(prefix) ? true : ["must start with '#{prefix}'"] of String
@@ -436,7 +493,7 @@ schema = JsonSchemer.schema(
         true
       end
     },
-    "x-ends-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+    "x-ends-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       suffix = schema.as_s
       if str = instance.as_s?
         str.ends_with?(suffix) ? true : ["must end with '#{suffix}'"] of String
@@ -462,7 +519,7 @@ schema = JsonSchemer.schema(
     "x-range": {"min": 0, "max": 100}
   }),
   keywords: {
-    "x-range" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+    "x-range" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       min = schema.as_h["min"].as_i
       max = schema.as_h["max"].as_i
       if num = instance.as_i64?
