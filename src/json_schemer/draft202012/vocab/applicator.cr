@@ -4,18 +4,20 @@ module JsonSchemer
       module Applicator
         # AllOf keyword
         class AllOf < Keyword
+          @schemas : Array(Schema) = [] of Schema
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} does not match all `allOf` schemas"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            parse_subschema_array
+            @schemas = parse_subschema_array
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            schemas = parsed.as(Array(Schema))
-            nested = schemas.map_with_index do |s, index|
-              s.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+            nested = @schemas.map_with_index do |subschema, index|
+              subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
             end
             result(instance, instance_location, keyword_location, nested.all?(&.valid), nested)
           end
@@ -23,18 +25,20 @@ module JsonSchemer
 
         # AnyOf keyword
         class AnyOf < Keyword
+          @schemas : Array(Schema) = [] of Schema
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} does not match any `anyOf` schemas"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            parse_subschema_array
+            @schemas = parse_subschema_array
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            schemas = parsed.as(Array(Schema))
-            nested = schemas.map_with_index do |s, index|
-              s.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+            nested = @schemas.map_with_index do |subschema, index|
+              subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
             end
             result(instance, instance_location, keyword_location, nested.any?(&.valid), nested)
           end
@@ -42,18 +46,20 @@ module JsonSchemer
 
         # OneOf keyword
         class OneOf < Keyword
+          @schemas : Array(Schema) = [] of Schema
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} does not match exactly one `oneOf` schema"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            parse_subschema_array
+            @schemas = parse_subschema_array
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            schemas = parsed.as(Array(Schema))
-            nested = schemas.map_with_index do |s, index|
-              s.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+            nested = @schemas.map_with_index do |subschema, index|
+              subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
             end
             valid_count = nested.count(&.valid)
             result(instance, instance_location, keyword_location, valid_count == 1, nested, ignore_nested: valid_count > 1)
@@ -62,80 +68,95 @@ module JsonSchemer
 
         # Not keyword
         class Not < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} matches `not` schema"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            subschema_result = parsed.as(Schema).validate_instance(instance, instance_location, keyword_location, context)
+            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, !subschema_result.valid, subschema_result.nested)
           end
         end
 
         # If keyword
         class If < Keyword
+          @subschema : Schema?
+
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            subschema_result = parsed.as(Schema).validate_instance(instance, instance_location, keyword_location, context)
+            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, true, subschema_result.nested, result_annotation: JSON::Any.new(subschema_result.valid))
           end
         end
 
         # Then keyword
         class Then < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} does not match conditional `then` schema"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            if_result = context.adjacent_results[If]?
+            if_result = context.adjacent_results.try(&.[If]?)
             return nil unless if_result
             return nil unless if_result.get_annotation.try(&.as_bool?)
 
-            subschema_result = parsed.as(Schema).validate_instance(instance, instance_location, keyword_location, context)
+            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, subschema_result.valid, subschema_result.nested)
           end
         end
 
         # Else keyword
         class Else < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} does not match conditional `else` schema"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            if_result = context.adjacent_results[If]?
+            if_result = context.adjacent_results.try(&.[If]?)
             return nil unless if_result
             return nil if if_result.get_annotation.try(&.as_bool?)
 
-            subschema_result = parsed.as(Schema).validate_instance(instance, instance_location, keyword_location, context)
+            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, subschema_result.valid, subschema_result.nested)
           end
         end
 
         # DependentSchemas keyword
         class DependentSchemas < Keyword
+          @schemas : Hash(String, Schema) = {} of String => Schema
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} does not match applicable `dependentSchemas` schemas"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            parse_subschema_hash
+            @schemas = parse_subschema_hash
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -143,12 +164,11 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            schemas = parsed.as(Hash(String, Schema))
             nested = [] of Result
 
-            schemas.each do |key, s|
+            @schemas.each do |key, subschema|
               next unless instance.as_h.has_key?(key)
-              nested << s.validate_instance(instance, instance_location, join_location(keyword_location, key), context)
+              nested << subschema.validate_instance(instance, instance_location, join_location(keyword_location, key), context)
             end
 
             result(instance, instance_location, keyword_location, nested.all?(&.valid), nested)
@@ -157,12 +177,15 @@ module JsonSchemer
 
         # PrefixItems keyword
         class PrefixItems < Keyword
+          @schemas : Array(Schema) = [] of Schema
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array items at #{formatted_instance_location} do not match corresponding `prefixItems` schemas"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            parse_subschema_array
+            @schemas = parse_subschema_array
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -170,10 +193,9 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            schemas = parsed.as(Array(Schema))
             arr = instance.as_a
-            nested = arr.first(schemas.size).map_with_index do |item, index|
-              schemas[index].validate_instance(item, join_location(instance_location, index.to_s), join_location(keyword_location, index.to_s), context)
+            nested = arr.first(@schemas.size).map_with_index do |item, index|
+              @schemas[index].validate_instance(item, join_location(instance_location, index.to_s), join_location(keyword_location, index.to_s), context)
             end
 
             annotation_value = nested.size - 1
@@ -183,12 +205,15 @@ module JsonSchemer
 
         # Items keyword
         class Items < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array items at #{formatted_instance_location} do not match `items` schema"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -196,11 +221,11 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            prefix_items_result = context.adjacent_results[PrefixItems]?
+            prefix_items_result = context.adjacent_results.try(&.[PrefixItems]?)
             evaluated_index = prefix_items_result.try(&.get_annotation.try(&.as_i?)) || -1
             offset = evaluated_index + 1
 
-            items_schema = parsed.as(Schema)
+            items_schema = @subschema.not_nil!
             arr = instance.as_a
             nested = arr[offset..].map_with_index do |item, index|
               items_schema.validate_instance(item, join_location(instance_location, (offset + index).to_s), keyword_location, context)
@@ -213,12 +238,15 @@ module JsonSchemer
 
         # Contains keyword
         class Contains < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array at #{formatted_instance_location} does not contain enough items that match `contains` schema"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -226,7 +254,7 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            contains_schema = parsed.as(Schema)
+            contains_schema = @subschema.not_nil!
             arr = instance.as_a
             nested = arr.map_with_index do |item, index|
               contains_schema.validate_instance(item, join_location(instance_location, index.to_s), keyword_location, context)
@@ -250,12 +278,15 @@ module JsonSchemer
 
         # Properties keyword
         class Properties < Keyword
+          @schemas : Hash(String, Schema) = {} of String => Schema
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match corresponding `properties` schemas"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            parse_subschema_hash
+            @schemas = parse_subschema_hash
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -263,11 +294,10 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            schemas = parsed.as(Hash(String, Schema))
             evaluated_keys = [] of String
             nested = [] of Result
 
-            schemas.each do |property, prop_schema|
+            @schemas.each do |property, prop_schema|
               if instance.as_h.has_key?(property)
                 evaluated_keys << property
                 nested << prop_schema.validate_instance(
@@ -286,12 +316,15 @@ module JsonSchemer
 
         # PatternProperties keyword
         class PatternProperties < Keyword
+          @schemas : Hash(String, Schema) = {} of String => Schema
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match corresponding `patternProperties` schemas"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            parse_subschema_hash
+            @schemas = parse_subschema_hash
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -299,11 +332,10 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            schemas = parsed.as(Hash(String, Schema))
             evaluated = Set(String).new
             nested = [] of Result
 
-            schemas.each do |pattern, pattern_schema|
+            @schemas.each do |pattern, pattern_schema|
               regexp = root.resolve_regexp(pattern)
               instance.as_h.each do |key, val|
                 if regexp.matches?(key)
@@ -320,6 +352,8 @@ module JsonSchemer
 
         # AdditionalProperties keyword
         class AdditionalProperties < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match `additionalProperties` schema"
           end
@@ -329,7 +363,8 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -339,17 +374,17 @@ module JsonSchemer
 
             evaluated_keys = Set(String).new
 
-            properties_result = context.adjacent_results[Properties]?
+            properties_result = context.adjacent_results.try(&.[Properties]?)
             if properties_result && properties_result.get_annotation
               evaluated_keys.concat(properties_result.get_annotation.not_nil!.as_a.map(&.as_s))
             end
 
-            pattern_properties_result = context.adjacent_results[PatternProperties]?
+            pattern_properties_result = context.adjacent_results.try(&.[PatternProperties]?)
             if pattern_properties_result && pattern_properties_result.get_annotation
               evaluated_keys.concat(pattern_properties_result.get_annotation.not_nil!.as_a.map(&.as_s))
             end
 
-            additional_schema = parsed.as(Schema)
+            additional_schema = @subschema.not_nil!
             evaluated = {} of String => JSON::Any
             nested = [] of Result
 
@@ -367,12 +402,15 @@ module JsonSchemer
 
         # PropertyNames keyword
         class PropertyNames < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object property names at #{formatted_instance_location} do not match `propertyNames` schema"
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -380,7 +418,7 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            names_schema = parsed.as(Schema)
+            names_schema = @subschema.not_nil!
             nested = instance.as_h.keys.map do |key|
               names_schema.validate_instance(JSON::Any.new(key), instance_location, keyword_location, context)
             end

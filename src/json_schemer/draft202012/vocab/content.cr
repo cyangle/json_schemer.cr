@@ -35,7 +35,7 @@ module JsonSchemer
 
             # Get decoded content from contentEncoding if present
             content = instance.as_s
-            encoding_result = context.adjacent_results[ContentEncoding]?
+            encoding_result = context.adjacent_results.try(&.[ContentEncoding]?)
             if encoding_result && encoding_result.get_annotation
               ann = encoding_result.get_annotation
               if ann && ann.as_s?
@@ -61,19 +61,22 @@ module JsonSchemer
 
         # ContentSchema keyword
         class ContentSchema < Keyword
+          @subschema : Schema?
+
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
             # contentSchema only applies when contentMediaType is present
-            media_type_result = context.adjacent_results[ContentMediaType]?
+            media_type_result = context.adjacent_results.try(&.[ContentMediaType]?)
             return result(instance, instance_location, keyword_location, true) unless media_type_result
 
             anno = media_type_result.get_annotation
             return result(instance, instance_location, keyword_location, true) unless anno
 
-            content_schema = parsed.as(Schema)
+            content_schema = @subschema.not_nil!
             subschema_result = content_schema.validate_instance(anno, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, true, subschema_result.nested, result_annotation: JSON::Any.new(subschema_result.valid))
           end

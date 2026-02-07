@@ -51,6 +51,10 @@ module JsonSchemer
   class InvalidEcmaRegexp < Error
   end
 
+  # Raised when a schema keyword value has an invalid type.
+  class InvalidSchema < Error
+  end
+
   # Pretty error formatting helper
   module Errors
     def self.pretty(error : Hash(String, JSON::Any)) : String

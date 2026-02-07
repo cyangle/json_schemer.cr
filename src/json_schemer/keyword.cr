@@ -7,7 +7,7 @@ module JsonSchemer
     getter parent : Schema | Keyword
     getter root : Schema
     getter keyword : String
-    getter parsed : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
+    getter parsed : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
 
     @schema : Schema
     @absolute_keyword_location : String?
@@ -17,7 +17,9 @@ module JsonSchemer
     def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
       @root = parent.root
       @schema = schema || (parent.is_a?(Schema) ? parent : parent.schema)
-      @parsed = parse
+      parse_result = parse
+      # After parse, ensure instance variables are set if they were not nullable
+      @parsed = parse_result
     end
 
     def schema : Schema
@@ -86,13 +88,16 @@ module JsonSchemer
       end
     end
 
-    protected def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
+    protected def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
       value
     end
 
     # Helper: Parse value as an array of subschemas
     # Used by: AllOf, AnyOf, OneOf, PrefixItems
     protected def parse_subschema_array : Array(Schema)
+      unless value.raw.is_a?(Array)
+        raise InvalidSchema.new("Value for keyword '#{keyword}' must be an array")
+      end
       value.as_a.map_with_index do |subschema_value, index|
         subschema(subschema_value, index.to_s)
       end
@@ -101,6 +106,9 @@ module JsonSchemer
     # Helper: Parse value as a hash of subschemas
     # Used by: Properties, PatternProperties, DependentSchemas, $defs
     protected def parse_subschema_hash : Hash(String, Schema)
+      unless value.raw.is_a?(Hash)
+        raise InvalidSchema.new("Value for keyword '#{keyword}' must be an object")
+      end
       result = {} of String => Schema
       value.as_h.each do |key, subschema_value|
         result[key] = subschema(subschema_value, key)

@@ -4,6 +4,8 @@ module JsonSchemer
       module Unevaluated
         # UnevaluatedItems keyword
         class UnevaluatedItems < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array items at #{formatted_instance_location} do not match `unevaluatedItems` schema"
           end
@@ -13,7 +15,8 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -24,11 +27,11 @@ module JsonSchemer
             unevaluated_items = Set(Int32).new
             instance.as_a.size.times { |i| unevaluated_items << i }
 
-            context.adjacent_results.each_value do |adjacent_result|
+            context.adjacent_results.try(&.each_value do |adjacent_result|
               collect_unevaluated_items(adjacent_result, unevaluated_items)
-            end
+            end)
 
-            items_schema = parsed.as(Schema)
+            items_schema = @subschema.not_nil!
             nested = unevaluated_items.map do |index|
               items_schema.validate_instance(
                 instance.as_a[index],
@@ -72,6 +75,8 @@ module JsonSchemer
 
         # UnevaluatedProperties keyword
         class UnevaluatedProperties < Keyword
+          @subschema : Schema?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match `unevaluatedProperties` schema"
           end
@@ -81,7 +86,8 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            subschema(value)
+            @subschema = subschema(value)
+            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -91,11 +97,11 @@ module JsonSchemer
 
             evaluated_keys = Set(String).new
 
-            context.adjacent_results.each_value do |adjacent_result|
+            context.adjacent_results.try(&.each_value do |adjacent_result|
               collect_evaluated_keys(adjacent_result, evaluated_keys)
-            end
+            end)
 
-            props_schema = parsed.as(Schema)
+            props_schema = @subschema.not_nil!
             evaluated = {} of String => JSON::Any
             nested = [] of Result
 

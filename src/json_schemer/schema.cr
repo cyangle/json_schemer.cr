@@ -33,14 +33,14 @@ module JsonSchemer
     class Context
       property instance : JSON::Any
       property dynamic_scope : Array(Schema)
-      property adjacent_results : Hash(Keyword.class, Result)
+      property adjacent_results : Hash(Keyword.class, Result)?
       property short_circuit : Bool
       property access_mode : String?
 
       def initialize(
         @instance : JSON::Any,
         @dynamic_scope : Array(Schema) = [] of Schema,
-        @adjacent_results : Hash(Keyword.class, Result) = {} of Keyword.class => Result,
+        @adjacent_results : Hash(Keyword.class, Result)? = nil,
         @short_circuit : Bool = false,
         @access_mode : String? = nil,
       )
@@ -104,6 +104,7 @@ module JsonSchemer
     @ref_resolver : Proc(URI, JSONHash?)?
     @regexp_resolver : Proc(String, Regex?)?
     @root_keyword_location : Location::Node?
+    @needs_adjacent_results : Bool?
 
     # Initializes a new `Schema`.
     #
@@ -203,11 +204,24 @@ module JsonSchemer
 
       @parsed = {} of String => Keyword
       parse
+      @needs_adjacent_results = parsed.keys.any? { |k| ADJACENT_CONSUMERS.includes?(k) }
     end
 
     def schema : Schema
       self
     end
+
+    ADJACENT_CONSUMERS = {
+      "additionalProperties",
+      "items",
+      "then",
+      "else",
+      "maxContains",
+      "minContains",
+      "unevaluatedProperties",
+      "unevaluatedItems",
+      "contentMediaType",
+    }
 
     # Validates an instance against the schema and returns true if valid.
     #
@@ -268,12 +282,12 @@ module JsonSchemer
                         JSON.parse(instance.to_json)
                       end
 
-      instance_location = root_keyword_location
+      instance_location = Location.root
       keyword_location = root_keyword_location
       context = Context.new(
         json_instance,
         [] of Schema,
-        {} of Keyword.class => Result,
+        nil,
         resolved_output_format == "flag",
         resolved_access_mode
       )
@@ -286,7 +300,13 @@ module JsonSchemer
     def validate_instance(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Context) : Result
       context.dynamic_scope.push(self)
       original_adjacent_results = context.adjacent_results
-      adjacent_results = context.adjacent_results = {} of Keyword.class => Result
+
+      adjacent_results = if @needs_adjacent_results
+                           context.adjacent_results = {} of Keyword.class => Result
+                         else
+                           context.adjacent_results = nil
+                         end
+
       short_circuit = context.short_circuit
 
       begin
@@ -301,14 +321,14 @@ module JsonSchemer
         valid = true
         nested = [] of Result
 
-        parsed.each do |kw, keyword_instance|
-          keyword_result = keyword_instance.validate(instance, instance_location, join_location(keyword_location, kw), context)
+        parsed.each_value do |keyword_instance|
+          keyword_result = keyword_instance.validate(instance, instance_location, join_location(keyword_location, keyword_instance.keyword), context)
           next unless keyword_result
 
           valid = valid && keyword_result.valid
           return result(instance, instance_location, keyword_location, false) if short_circuit && !valid
           nested << keyword_result
-          adjacent_results[keyword_instance.class] = keyword_result
+          adjacent_results[keyword_instance.class] = keyword_result if adjacent_results
         end
 
         result(instance, instance_location, keyword_location, valid, nested)
