@@ -1,10 +1,10 @@
 name: json_schemer
-version: 0.5.0
+version: 0.6.0
 
 authors:
   - Chao Yang <cyang05@outlook.com>
 
-crystal: '>= 1.18.2'
+crystal: '>= 1.19.0'
 
 dependencies:
   hana:

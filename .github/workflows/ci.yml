@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crystal: ["1.18", latest]
+        crystal: ["1.19", latest]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
