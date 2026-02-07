@@ -21,6 +21,7 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 - ECMA-262 compatible regex patterns
 - `$ref`, `$anchor`, `$dynamicRef` / `$dynamicAnchor` support
 - Complete vocabulary implementations
+- Custom error messages with `x-error`
 
 ## Installation
 

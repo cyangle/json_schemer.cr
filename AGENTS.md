@@ -9,8 +9,11 @@ It implements JSON Schema validation according to Draft 2020-12 and OpenAPI 3.1 
 # Install dependencies
 shards install
 
-# Run all tests
+# Run all tests (default: no simpleidn)
 crystal spec
+
+# Run all tests with simpleidn enabled (requires ICU)
+crystal spec -Dwith_simpleidn
 
 # Run a single test file
 crystal spec spec/json_schemer_spec.cr
@@ -74,6 +77,7 @@ src/
         base.cr                # OpenAPI 3.1 base vocabulary keywords
       vocab.cr                 # OpenAPI vocabulary registration
       meta.cr                  # OpenAPI meta schema definitions
+      schema.json              # OpenAPI 3.1 meta-schema
       document.cr              # OpenAPI document validation
     openapi.cr                 # OpenAPI document handler
 spec/
@@ -82,6 +86,8 @@ spec/
   format_spec.cr               # Format validation tests
   ref_spec.cr                  # $ref resolution tests
   hooks_spec.cr                # Validation hooks tests
+  options_spec.cr              # Configuration options tests
+  x_error_spec.cr              # Custom error message (x-error) tests
   openapi_spec.cr              # OpenAPI validation tests
   pointers_spec.cr             # JSON pointer tests
   regex_spec.cr                # Regex pattern tests
@@ -264,8 +270,36 @@ end
 
 ## Dependencies
 - **hana**: JSON Pointer implementation (github: cyangle/hana.cr, >= 0.1.0)
-- **simpleidn**: IDN/Punycode support for hostname validation (github: cyangle/simpleidn.cr, >= 0.4.1)
+- **simpleidn**: IDN/Punycode support for hostname validation (github: cyangle/simpleidn.cr, >= 0.8.0).
+  - Optional but recommended for full compliance.
+  - Requires `libicu`.
+  - Compile with `-Dwith_simpleidn` to enable strict IDN validation.
+  - Without it, naive regex validation is used for `hostname`/`email` and `idn-*` formats are skipped.
 - Crystal >= 1.18.2
+
+## Feature: Custom Error Messages (x-error)
+The `x-error` keyword allows customizing validation error messages.
+
+```json
+{
+  "type": "string",
+  "minLength": 5,
+  "x-error": "Value must be a string at least 5 chars long"
+}
+```
+
+It supports specific keyword overrides and variable interpolation:
+```json
+{
+  "properties": {
+    "age": {
+      "type": "integer",
+      "minimum": 18,
+      "x-error": "Value %{instance} at %{instanceLocation} must be >= %{keywordValue}"
+    }
+  }
+}
+```
 
 ## JSON Schema Test Suite Integration
 
@@ -339,3 +373,4 @@ git submodule update --remote JSON-Schema-Test-Suite
 6. **Draft 2020-12 default**: Format validation is annotation-only by default
 7. **ECMA regexp**: Use `regexp_resolver: "ecma"` for JavaScript-compatible patterns
 8. **OpenAPI 3.1 support**: Use `JsonSchemer.openapi(document)` for OpenAPI document validation
+9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.

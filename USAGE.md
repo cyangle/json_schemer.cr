@@ -362,6 +362,9 @@ Supported formats:
 - `json-pointer`, `relative-json-pointer`
 - `regex`
 
+> [!NOTE]
+> `idn-email` and `idn-hostname` formats require the `simpleidn` dependency and the `-Dwith_simpleidn` build flag. See [Installation](README.md#installation) for details.
+
 ## Custom Format Validators
 
 ```crystal
