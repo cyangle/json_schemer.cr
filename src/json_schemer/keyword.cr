@@ -130,5 +130,9 @@ module JsonSchemer
         regexp_resolver: schema.regexp_resolver
       )
     end
+
+    # Cache warmup hook
+    def after_schema_initialize : Nil
+    end
   end
 end

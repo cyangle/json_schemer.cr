@@ -16,7 +16,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -87,7 +86,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?

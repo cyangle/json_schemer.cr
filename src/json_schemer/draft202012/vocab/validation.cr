@@ -86,6 +86,7 @@ module JsonSchemer
         # Enum keyword
         class Enum < Keyword
           @enum_values : Array(JSON::Any) = [] of JSON::Any
+          @enum_set : Set(JSON::Any)?
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} is not one of: #{value}"
@@ -95,21 +96,24 @@ module JsonSchemer
             # Enum value must be an array
             if value.raw.is_a?(Array)
               @enum_values = value.as_a
+              # Optimization: Use Set for large enums (threshold > 10)
+              if @enum_values.size > 10
+                @enum_set = Set(JSON::Any).new(@enum_values)
+              end
             end
             value
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
             if @enum_values.empty? && !value.raw.is_a?(Array)
-              # If value is not an array, we ignore validation (consistent with previous behavior)
-              # But wait, if it IS an empty array [], validation should fail for any instance.
-              # So we need to distinguish empty array vs not-array.
-              # But previously: if value.raw.is_a?(Array) -> @enum_values set.
-              # If @enum_values is nil (not array), return true.
-              # If I want to avoid nilable, I need to know if it was set.
+              # If value is not an array, we ignore validation
               result(instance, instance_location, keyword_location, true)
             else
-              valid = @enum_values.includes?(instance)
+              valid = if set = @enum_set
+                        set.includes?(instance)
+                      else
+                        @enum_values.includes?(instance)
+                      end
               result(instance, instance_location, keyword_location, valid)
             end
           end
@@ -128,21 +132,9 @@ module JsonSchemer
 
         # MultipleOf keyword
         class MultipleOf < Keyword
-          @multiple_of_value : BigDecimal
-
-          def initialize(value : JSON::Any, parent : Schema | Keyword, keyword : String, schema : Schema? = nil)
-            super
-            if val = value.raw
-              if val.is_a?(Number)
-                @multiple_of_value = BigDecimal.new(val.to_s)
-              else
-                # Should be unreachable if parse raises, but compiler needs it
-                @multiple_of_value = BigDecimal.new("0")
-              end
-            else
-              @multiple_of_value = BigDecimal.new("0")
-            end
-          end
+          # Default value 0 is always valid against all numbers
+          # It will be overwritten by parse method via initialize method
+          @multiple_of_value : BigDecimal = BigDecimal.new(0)
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is not a multiple of: #{value}"
@@ -152,11 +144,7 @@ module JsonSchemer
             unless value.raw.is_a?(Number)
               raise InvalidSchema.new("Value for keyword 'multipleOf' must be a number")
             end
-            # @multiple_of_value is set in initialize or here?
-            # Parse is called in initialize. But Crystal compiler complains if not set in initialize.
-            # We must set it in parse but compiler doesn't know parse is called in initialize?
-            # Actually parse IS called in initialize.
-            # But compiler needs guarantee.
+            # Potential issue of losing precision when converting to BigDecimal
             @multiple_of_value = BigDecimal.new(value.raw.as(Number).to_s)
             value
           end
@@ -174,16 +162,7 @@ module JsonSchemer
 
         # Maximum keyword
         class Maximum < Keyword
-          @max_value : Float64
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            if val = value.raw.as?(Number)
-              @max_value = val.to_f64
-            else
-              @max_value = 0.0
-            end
-          end
+          @max_value : Float64 = Float64::INFINITY
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is greater than: #{value}"
@@ -208,17 +187,7 @@ module JsonSchemer
 
         # ExclusiveMaximum keyword
         class ExclusiveMaximum < Keyword
-          @ex_max_value : Float64
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            if val = value.raw.as?(Number)
-              @ex_max_value = val.to_f64
-            else
-              # raise error instead of fallback, but compiler needs assignment
-              @ex_max_value = 0.0
-            end
-          end
+          @ex_max_value : Float64 = Float64::INFINITY
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is greater than or equal to: #{value}"
@@ -243,16 +212,7 @@ module JsonSchemer
 
         # Minimum keyword
         class Minimum < Keyword
-          @min_value : Float64
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            if val = value.raw.as?(Number)
-              @min_value = val.to_f64
-            else
-              @min_value = 0.0
-            end
-          end
+          @min_value : Float64 = -Float64::INFINITY
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is less than: #{value}"
@@ -277,16 +237,7 @@ module JsonSchemer
 
         # ExclusiveMinimum keyword
         class ExclusiveMinimum < Keyword
-          @ex_min_value : Float64
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            if val = value.raw.as?(Number)
-              @ex_min_value = val.to_f64
-            else
-              @ex_min_value = 0.0
-            end
-          end
+          @ex_min_value : Float64 = -Float64::INFINITY
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is less than or equal to: #{value}"
@@ -311,18 +262,7 @@ module JsonSchemer
 
         # MaxLength keyword
         class MaxLength < Keyword
-          @max_length : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            # Pre-initialize with safe defaults to satisfy compiler
-            @max_length = 0
-            if val = value.raw.as?(Int)
-              @max_length = val.to_i
-            elsif val = value.raw.as?(Float)
-              @max_length = val.to_i
-            end
-          end
+          @max_length : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "string length at #{formatted_instance_location} is greater than: #{value}"
@@ -330,11 +270,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @max_length = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @max_length = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @max_length = raw.to_i
+                @max_length = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'maxLength' must be an integer")
               end
@@ -355,17 +295,7 @@ module JsonSchemer
 
         # MinLength keyword
         class MinLength < Keyword
-          @min_length : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            @min_length = 0
-            if val = value.raw.as?(Int)
-              @min_length = val.to_i
-            elsif val = value.raw.as?(Float)
-              @min_length = val.to_i
-            end
-          end
+          @min_length : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "string length at #{formatted_instance_location} is less than: #{value}"
@@ -373,11 +303,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @min_length = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @min_length = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @min_length = raw.to_i
+                @min_length = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'minLength' must be an integer")
               end
@@ -419,17 +349,7 @@ module JsonSchemer
 
         # MaxItems keyword
         class MaxItems < Keyword
-          @max_items : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            @max_items = 0
-            if val = value.raw.as?(Int)
-              @max_items = val.to_i
-            elsif val = value.raw.as?(Float)
-              @max_items = val.to_i
-            end
-          end
+          @max_items : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array size at #{formatted_instance_location} is greater than: #{value}"
@@ -437,11 +357,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @max_items = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @max_items = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @max_items = raw.to_i
+                @max_items = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'maxItems' must be an integer")
               end
@@ -462,17 +382,7 @@ module JsonSchemer
 
         # MinItems keyword
         class MinItems < Keyword
-          @min_items : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            @min_items = 0
-            if val = value.raw.as?(Int)
-              @min_items = val.to_i
-            elsif val = value.raw.as?(Float)
-              @min_items = val.to_i
-            end
-          end
+          @min_items : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array size at #{formatted_instance_location} is less than: #{value}"
@@ -480,11 +390,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @min_items = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @min_items = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @min_items = raw.to_i
+                @min_items = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'minItems' must be an integer")
               end
@@ -516,25 +426,21 @@ module JsonSchemer
             if value.as_bool == false
               return result(instance, instance_location, keyword_location, true)
             end
+
             arr = instance.as_a
-            valid = arr.size == arr.uniq.size
+            return result(instance, instance_location, keyword_location, true) if arr.size <= 1
+
+            # Optimization: Use Set iteration to short-circuit on first duplicate
+            seen = Set(JSON::Any).new(initial_capacity: arr.size)
+            valid = arr.all? { |item| seen.add?(item) }
+
             result(instance, instance_location, keyword_location, valid)
           end
         end
 
         # MaxContains keyword
         class MaxContains < Keyword
-          @max_contains : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            @max_contains = 0
-            if val = value.raw.as?(Int)
-              @max_contains = val.to_i
-            elsif val = value.raw.as?(Float)
-              @max_contains = val.to_i
-            end
-          end
+          @max_contains : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number of array items at #{formatted_instance_location} matching `contains` schema is greater than: #{value}"
@@ -542,11 +448,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @max_contains = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @max_contains = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @max_contains = raw.to_i
+                @max_contains = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'maxContains' must be an integer")
               end
@@ -576,17 +482,7 @@ module JsonSchemer
 
         # MinContains keyword
         class MinContains < Keyword
-          @min_contains : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            @min_contains = 0
-            if val = value.raw.as?(Int)
-              @min_contains = val.to_i
-            elsif val = value.raw.as?(Float)
-              @min_contains = val.to_i
-            end
-          end
+          @min_contains : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number of array items at #{formatted_instance_location} matching `contains` schema is less than: #{value}"
@@ -594,11 +490,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @min_contains = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @min_contains = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @min_contains = raw.to_i
+                @min_contains = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'minContains' must be an integer")
               end
@@ -628,17 +524,7 @@ module JsonSchemer
 
         # MaxProperties keyword
         class MaxProperties < Keyword
-          @max_properties : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            @max_properties = 0
-            if val = value.raw.as?(Int)
-              @max_properties = val.to_i
-            elsif val = value.raw.as?(Float)
-              @max_properties = val.to_i
-            end
-          end
+          @max_properties : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object size at #{formatted_instance_location} is greater than: #{value}"
@@ -646,11 +532,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @max_properties = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @max_properties = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @max_properties = raw.to_i
+                @max_properties = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'maxProperties' must be an integer")
               end
@@ -671,17 +557,7 @@ module JsonSchemer
 
         # MinProperties keyword
         class MinProperties < Keyword
-          @min_properties : Int32
-
-          def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
-            super
-            @min_properties = 0
-            if val = value.raw.as?(Int)
-              @min_properties = val.to_i
-            elsif val = value.raw.as?(Float)
-              @min_properties = val.to_i
-            end
-          end
+          @min_properties : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object size at #{formatted_instance_location} is less than: #{value}"
@@ -689,11 +565,11 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             raw = value.raw
-            if raw.is_a?(Int)
-              @min_properties = raw.to_i
-            elsif raw.is_a?(Float)
+            if raw.is_a?(Int64)
+              @min_properties = raw
+            elsif raw.is_a?(Float64)
               if raw == raw.floor
-                @min_properties = raw.to_i
+                @min_properties = raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword 'minProperties' must be an integer")
               end
@@ -715,6 +591,8 @@ module JsonSchemer
         # Required keyword
         class Required < Keyword
           @required_keys : Array(String) = [] of String
+          @effective_keys_read : Array(String) = [] of String
+          @effective_keys_write : Array(String) = [] of String
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             missing = details.try(&.["missing_keys"]?.try(&.as_a.map(&.as_s).join(", "))) || ""
@@ -723,6 +601,8 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             @required_keys = value.as_a.map(&.as_s)
+            @effective_keys_read = @required_keys
+            @effective_keys_write = @required_keys
             @required_keys
           end
 
@@ -731,29 +611,51 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            # Handle access mode
-            if context.access_mode
-              properties_kw = schema.parsed["properties"]?
-              if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
-                inapplicable = [] of String
-                properties_kw.parsed.as(Hash(String, Schema)).each do |property, subschema|
-                  read_only = subschema.parsed["readOnly"]?
-                  write_only = subschema.parsed["writeOnly"]?
+            effective_required_keys = case context.access_mode
+                                      when "read"
+                                        @effective_keys_read
+                                      when "write"
+                                        @effective_keys_write
+                                      else
+                                        @required_keys
+                                      end
 
-                  if context.access_mode == "write" && read_only.try(&.value.as_bool?) == true
-                    inapplicable << property
-                  end
-                  if context.access_mode == "read" && write_only.try(&.value.as_bool?) == true
-                    inapplicable << property
-                  end
+            valid = effective_required_keys.all? { |k| instance.as_h.has_key?(k) }
+            if valid
+              result(instance, instance_location, keyword_location, true)
+            else
+              missing_keys = effective_required_keys.reject { |k| instance.as_h.has_key?(k) }
+              details_hash = {"missing_keys" => JSON::Any.new(missing_keys.map { |k| JSON::Any.new(k) })}
+              result(instance, instance_location, keyword_location, false, details: details_hash)
+            end
+          end
+
+          private def calculate_effective_keys(mode : String) : Array(String)
+            # Calculate
+            inapplicable = [] of String
+
+            # Note: We access the parent schema's raw properties to determine readOnly/writeOnly
+            properties_kw = schema.parsed["properties"]?
+            if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
+              properties_kw.parsed.as(Hash(String, Schema)).each do |property, subschema|
+                read_only = subschema.parsed["readOnly"]?
+                write_only = subschema.parsed["writeOnly"]?
+
+                if mode == "write" && read_only.try(&.value.as_bool?) == true
+                  inapplicable << property
                 end
-                @required_keys = @required_keys - inapplicable
+                if mode == "read" && write_only.try(&.value.as_bool?) == true
+                  inapplicable << property
+                end
               end
             end
 
-            missing_keys = @required_keys - instance.as_h.keys
-            details_hash = {"missing_keys" => JSON::Any.new(missing_keys.map { |k| JSON::Any.new(k) })}
-            result(instance, instance_location, keyword_location, missing_keys.empty?, details: details_hash)
+            inapplicable.empty? ? @required_keys : @required_keys.reject { |k| inapplicable.includes?(k) }
+          end
+
+          def after_schema_initialize : Nil
+            @effective_keys_read = calculate_effective_keys("read")
+            @effective_keys_write = calculate_effective_keys("write")
           end
         end
 
@@ -779,22 +681,26 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            existing_keys = instance.as_h.keys
+            existing_keys = instance.as_h
             nested = [] of Result
 
             @dependent_required.each do |key, required|
-              next unless instance.as_h.has_key?(key)
+              next unless existing_keys.has_key?(key)
 
-              missing = required - existing_keys
-              nested << result(
-                instance,
-                join_location(instance_location, key),
-                join_location(keyword_location, key),
-                missing.empty?
-              )
+              valid = required.all? { |k| existing_keys.has_key?(k) }
+              unless valid
+                missing = required.reject { |k| existing_keys.has_key?(k) }
+                nested << result(
+                  instance,
+                  join_location(instance_location, key),
+                  join_location(keyword_location, key),
+                  false,
+                  details: {"missing_keys" => JSON::Any.new(missing.map { |k| JSON::Any.new(k) })}
+                )
+              end
             end
 
-            result(instance, instance_location, keyword_location, nested.all?(&.valid), nested)
+            result(instance, instance_location, keyword_location, nested.empty?, nested)
           end
         end
       end

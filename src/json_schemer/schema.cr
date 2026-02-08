@@ -763,6 +763,9 @@ module JsonSchemer
           parsed[kw] = klass.new(kval, self, kw)
         end
       end
+
+      # Warmup caches
+      parsed.each_value(&.after_schema_initialize)
     end
 
     private def root_keyword_location : Location::Node

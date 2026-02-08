@@ -12,14 +12,47 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_array
-            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            nested = @schemas.map_with_index do |subschema, index|
-              subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+            if context.short_circuit
+              valid = @schemas.all? do |subschema|
+                # Short-circuiting mode: stop as soon as we find an invalid one
+                # Note: We rely on the subschema's `validate_instance` returning a Result object.
+                # In short-circuit mode, we don't care about the nested results if we fail.
+                # But we can't easily get the index here without index.
+                # So we iterate.
+                # Actually, `all?` is cleaner.
+                # But wait, we need to pass locations.
+
+                # To do this correctly with indices, we can't use standard `all?` without index tracking.
+                # And `map_with_index` is eager.
+
+                # Manual iteration for short-circuiting:
+                true
+              end
+              # Refactored below
             end
-            result(instance, instance_location, keyword_location, nested.all?(&.valid), nested)
+
+            nested = [] of Result
+
+            if context.short_circuit
+              valid = true
+              @schemas.each_with_index do |subschema, index|
+                res = subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+                nested << res
+                unless res.valid
+                  valid = false
+                  break
+                end
+              end
+              result(instance, instance_location, keyword_location, valid, nested)
+            else
+              nested = @schemas.map_with_index do |subschema, index|
+                subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+              end
+              result(instance, instance_location, keyword_location, nested.all?(&.valid), nested)
+            end
           end
         end
 
@@ -33,7 +66,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_array
-            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -54,15 +86,33 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_array
-            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            nested = @schemas.map_with_index do |subschema, index|
-              subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+            if context.short_circuit
+              valid_count = 0
+              nested = [] of Result
+              @schemas.each_with_index do |subschema, index|
+                res = subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+                nested << res
+                if res.valid
+                  valid_count += 1
+                  if valid_count > 1
+                    break # Optimization: if we already have > 1 valid, we know it will fail OneOf
+                  end
+                end
+              end
+              # NOTE: Short-circuiting here is partial. If we break early, we effectively fail.
+              # But we must ensure the result reflects that.
+              # If we broke because valid_count > 1, then valid_count == 2 (at least).
+              result(instance, instance_location, keyword_location, valid_count == 1, nested, ignore_nested: valid_count > 1)
+            else
+              nested = @schemas.map_with_index do |subschema, index|
+                subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+              end
+              valid_count = nested.count(&.valid)
+              result(instance, instance_location, keyword_location, valid_count == 1, nested, ignore_nested: valid_count > 1)
             end
-            valid_count = nested.count(&.valid)
-            result(instance, instance_location, keyword_location, valid_count == 1, nested, ignore_nested: valid_count > 1)
           end
         end
 
@@ -76,7 +126,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -91,7 +140,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -110,7 +158,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -133,7 +180,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -156,7 +202,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_hash
-            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -185,7 +230,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_array
-            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -213,7 +257,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -246,7 +289,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -286,7 +328,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_hash
-            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -324,7 +365,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_hash
-            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -364,7 +404,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -410,7 +449,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
-            @subschema
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
@@ -451,17 +489,20 @@ module JsonSchemer
             end
 
             deps = parsed.as(Hash(String, Schema | Array(String)))
-            existing_keys = instance.as_h.keys
+            existing_keys = instance.as_h
             nested = [] of Result
 
             deps.each do |key, dep_value|
-              next unless instance.as_h.has_key?(key)
+              next unless existing_keys.has_key?(key)
 
               case dep_value
               when Array(String)
-                missing_keys = dep_value - existing_keys
-                details_hash = {"missing_keys" => JSON::Any.new(missing_keys.map { |k| JSON::Any.new(k) })}
-                nested << result(instance, instance_location, join_location(keyword_location, key), missing_keys.empty?, details: details_hash)
+                valid = dep_value.all? { |k| existing_keys.has_key?(k) }
+                unless valid
+                  missing_keys = dep_value.reject { |k| existing_keys.has_key?(k) }
+                  details_hash = {"missing_keys" => JSON::Any.new(missing_keys.map { |k| JSON::Any.new(k) })}
+                  nested << result(instance, instance_location, join_location(keyword_location, key), false, details: details_hash)
+                end
               when Schema
                 nested << dep_value.validate_instance(instance, instance_location, join_location(keyword_location, key), context)
               end
