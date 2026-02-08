@@ -3,7 +3,7 @@ module JsonSchemer
   # All operations are O(1).
   #
   # NOTE: This class is not thread-safe. Synchronization must be handled by the caller.
-  private class LRUCache(K, V)
+  class LRUCache(K, V)
     private class Node(K, V)
       property key : K
       property value : V
