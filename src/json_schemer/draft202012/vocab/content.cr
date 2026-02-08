@@ -4,9 +4,9 @@ module JsonSchemer
       module ContentVocab
         # ContentEncoding keyword
         class ContentEncoding < Keyword
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             encoding_name = value.as_s
@@ -16,21 +16,21 @@ module JsonSchemer
               success, decoded = encoder.call(instance.as_s)
               if success && decoded
                 anno = JSON::Any.new(decoded)
-                result(instance, instance_location, keyword_location, true, result_annotation: anno)
+                result(instance, instance_location, location, true, result_annotation: anno)
               else
-                result(instance, instance_location, keyword_location, true)
+                result(instance, instance_location, location, true)
               end
             else
-              result(instance, instance_location, keyword_location, true)
+              result(instance, instance_location, location, true)
             end
           end
         end
 
         # ContentMediaType keyword
         class ContentMediaType < Keyword
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             # Get decoded content from contentEncoding if present
@@ -49,12 +49,12 @@ module JsonSchemer
             if parser
               success, parsed_content = parser.call(content)
               if success && parsed_content
-                result(instance, instance_location, keyword_location, true, result_annotation: parsed_content)
+                result(instance, instance_location, location, true, result_annotation: parsed_content)
               else
-                result(instance, instance_location, keyword_location, true)
+                result(instance, instance_location, location, true)
               end
             else
-              result(instance, instance_location, keyword_location, true)
+              result(instance, instance_location, location, true)
             end
           end
         end
@@ -67,18 +67,18 @@ module JsonSchemer
             @subschema = subschema(value)
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             # contentSchema only applies when contentMediaType is present
             media_type_result = context.adjacent_results.try(&.[ContentMediaType]?)
-            return result(instance, instance_location, keyword_location, true) unless media_type_result
+            return result(instance, instance_location, location, true) unless media_type_result
 
             anno = media_type_result.annotation
-            return result(instance, instance_location, keyword_location, true) unless anno
+            return result(instance, instance_location, location, true) unless anno
 
             content_schema = @subschema
-            return result(instance, instance_location, keyword_location, true) unless content_schema
-            subschema_result = content_schema.validate_instance(anno, instance_location, keyword_location, context)
-            result(instance, instance_location, keyword_location, true, subschema_result.nested, result_annotation: JSON::Any.new(subschema_result.valid))
+            return result(instance, instance_location, location, true) unless content_schema
+            subschema_result = content_schema.validate_instance(anno, instance_location, context)
+            result(instance, instance_location, location, true, subschema_result.nested, result_annotation: JSON::Any.new(subschema_result.valid))
           end
         end
       end

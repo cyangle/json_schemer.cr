@@ -34,7 +34,7 @@ module JsonSchemer
     end
 
     # Override in subclasses to perform validation
-    def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+    def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
       nil
     end
 

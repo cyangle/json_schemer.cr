@@ -50,14 +50,14 @@ module JsonSchemer
             end
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             if single = @single_type
               valid = valid_type(single, instance)
-              result(instance, instance_location, keyword_location, valid, type: single)
+              result(instance, instance_location, location, valid, type: single)
             else
               # Use types array (even if empty, though empty type array is probably invalid schema or matches nothing)
               valid = @types.any? { |type_str| valid_type(type_str, instance) }
-              result(instance, instance_location, keyword_location, valid)
+              result(instance, instance_location, location, valid)
             end
           end
 
@@ -104,17 +104,17 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             if @enum_values.empty? && !value.raw.is_a?(Array)
               # If value is not an array, we ignore validation
-              result(instance, instance_location, keyword_location, true)
+              result(instance, instance_location, location, true)
             else
               valid = if set = @enum_set
                         set.includes?(instance)
                       else
                         @enum_values.includes?(instance)
                       end
-              result(instance, instance_location, keyword_location, valid)
+              result(instance, instance_location, location, valid)
             end
           end
         end
@@ -125,8 +125,8 @@ module JsonSchemer
             "value at #{formatted_instance_location} is not: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            result(instance, instance_location, keyword_location, value == instance)
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            result(instance, instance_location, location, value == instance)
           end
         end
 
@@ -149,14 +149,14 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             instance_bd = BigDecimal.new(instance.raw.as(Number).to_s)
             valid = (instance_bd % @multiple_of_value).zero?
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -176,12 +176,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.raw.as(Number).to_f64 <= @max_value
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -201,12 +201,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.raw.as(Number).to_f64 < @ex_max_value
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -226,12 +226,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.raw.as(Number).to_f64 >= @min_value
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -251,12 +251,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.raw.as(Number).to_f64 > @ex_min_value
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -284,12 +284,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.as_s.size <= @max_length
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -317,12 +317,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.as_s.size >= @min_length
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -338,14 +338,14 @@ module JsonSchemer
             @regex = root.resolve_regexp(value.as_s)
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             regex = @regex
-            return result(instance, instance_location, keyword_location, true) unless regex
+            return result(instance, instance_location, location, true) unless regex
             valid = regex.matches?(instance.as_s)
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -373,12 +373,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.as_a.size <= @max_items
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -406,12 +406,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.as_a.size >= @min_items
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -421,22 +421,22 @@ module JsonSchemer
             "array items at #{formatted_instance_location} are not unique"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             if value.as_bool == false
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             arr = instance.as_a
-            return result(instance, instance_location, keyword_location, true) if arr.size <= 1
+            return result(instance, instance_location, location, true) if arr.size <= 1
 
             # Optimization: Use Set iteration to short-circuit on first duplicate
             seen = Set(JSON::Any).new(initial_capacity: arr.size)
             valid = arr.all? { |item| seen.add?(item) }
 
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -464,20 +464,20 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             contains_result = context.adjacent_results.try(&.[Applicator::Contains]?)
             unless contains_result
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             anno = contains_result.annotation
             if anno && anno.raw.is_a?(Array)
               valid = anno.as_a.size <= @max_contains
-              result(instance, instance_location, keyword_location, valid)
+              result(instance, instance_location, location, valid)
             else
-              result(instance, instance_location, keyword_location, true)
+              result(instance, instance_location, location, true)
             end
           end
         end
@@ -506,20 +506,20 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             contains_result = context.adjacent_results.try(&.[Applicator::Contains]?)
             unless contains_result
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             anno = contains_result.annotation
             if anno && anno.raw.is_a?(Array)
               valid = anno.as_a.size >= @min_contains
-              result(instance, instance_location, keyword_location, valid)
+              result(instance, instance_location, location, valid)
             else
-              result(instance, instance_location, keyword_location, true)
+              result(instance, instance_location, location, true)
             end
           end
         end
@@ -548,12 +548,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.as_h.size <= @max_properties
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -581,12 +581,12 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             valid = instance.as_h.size >= @min_properties
-            result(instance, instance_location, keyword_location, valid)
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -608,9 +608,9 @@ module JsonSchemer
             @required_keys
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             effective_required_keys = case context.access_mode
@@ -624,11 +624,11 @@ module JsonSchemer
 
             valid = effective_required_keys.all? { |k| instance.as_h.has_key?(k) }
             if valid
-              result(instance, instance_location, keyword_location, true)
+              result(instance, instance_location, location, true)
             else
               missing_keys = effective_required_keys.reject { |k| instance.as_h.has_key?(k) }
               details_hash = {"missing_keys" => JSON::Any.new(missing_keys.map { |k| JSON::Any.new(k) })}
-              result(instance, instance_location, keyword_location, false, details: details_hash)
+              result(instance, instance_location, location, false, details: details_hash)
             end
           end
 
@@ -678,9 +678,9 @@ module JsonSchemer
             result
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             existing_keys = instance.as_h
@@ -695,14 +695,14 @@ module JsonSchemer
                 nested << result(
                   instance,
                   join_location(instance_location, key),
-                  join_location(keyword_location, key),
+                  join_location(location, key),
                   false,
                   details: {"missing_keys" => JSON::Any.new(missing.map { |k| JSON::Any.new(k) })}
                 )
               end
             end
 
-            result(instance, instance_location, keyword_location, nested.empty?, nested)
+            result(instance, instance_location, location, nested.empty?, nested)
           end
         end
       end

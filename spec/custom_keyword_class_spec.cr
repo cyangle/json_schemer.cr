@@ -67,16 +67,16 @@ module CustomKeywords
       value
     end
 
-    def validate(instance, instance_location, keyword_location, context)
+    def validate(instance, instance_location, context)
       # Only validate strings
       unless instance.raw.is_a?(String)
-        return result(instance, instance_location, keyword_location, true)
+        return result(instance, instance_location, location, true)
       end
 
       val_str = instance.as_s
       # Simple regex for money: "12.34"
       unless val_str.matches?(/\A\d+\.\d{2}\z/)
-        return result(instance, instance_location, keyword_location, false)
+        return result(instance, instance_location, location, false)
       end
 
       amount = BigDecimal.new(val_str)
@@ -88,18 +88,18 @@ module CustomKeywords
       # Example: amount = 10. @min = -1. 10 < -1 is false. OK.
       # Example: amount = 10. @min = 20. 10 < 20 is true. Error. OK.
       if amount < @min
-        return result(instance, instance_location, keyword_location, false,
+        return result(instance, instance_location, location, false,
           details: {"error" => JSON::Any.new("amount must be >= #{@min}")}
         )
       end
 
       if amount > @max
-        return result(instance, instance_location, keyword_location, false,
+        return result(instance, instance_location, location, false,
           details: {"error" => JSON::Any.new("amount must be <= #{@max}")}
         )
       end
 
-      result(instance, instance_location, keyword_location, true)
+      result(instance, instance_location, location, true)
     end
 
     def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String

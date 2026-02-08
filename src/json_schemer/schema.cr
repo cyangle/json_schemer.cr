@@ -296,7 +296,6 @@ module JsonSchemer
                       end
 
       instance_location = Location.root
-      keyword_location = location
       context = Context.new(
         json_instance,
         [] of Schema,
@@ -305,12 +304,12 @@ module JsonSchemer
         resolved_access_mode
       )
 
-      result = validate_instance(json_instance, instance_location, keyword_location, context)
+      result = validate_instance(json_instance, instance_location, context)
       result.output(resolved_output_format)
     end
 
     # Validate instance (internal)
-    def validate_instance(instance : JSON::Any, instance_location : Location::Node, _keyword_location : Location::Node, context : Context) : Result
+    def validate_instance(instance : JSON::Any, instance_location : Location::Node, context : Context) : Result
       context.dynamic_scope.push(self)
       original_adjacent_results = context.adjacent_results
 
@@ -335,7 +334,7 @@ module JsonSchemer
         nested = [] of Result
 
         parsed.each_value do |keyword_instance|
-          keyword_result = keyword_instance.validate(instance, instance_location, keyword_instance.location, context)
+          keyword_result = keyword_instance.validate(instance, instance_location, context)
           next unless keyword_result
 
           valid = valid && keyword_result.valid

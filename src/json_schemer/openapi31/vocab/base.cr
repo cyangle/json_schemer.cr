@@ -6,11 +6,11 @@ module JsonSchemer
         class AllOf < Draft202012::Vocab::Applicator::AllOf
           property skip_ref_once : String?
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             schemas = parsed.as(Array(Schema))
             nested = [] of Result
 
-            schemas.each_with_index do |subschema, index|
+            schemas.each do |subschema|
               ref_kw = subschema.parsed["$ref"]?
               if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
                 ref_schema = ref_kw.ref_schema
@@ -22,17 +22,17 @@ module JsonSchemer
                 end
               end
 
-              nested << subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+              nested << subschema.validate_instance(instance, instance_location, context)
             end
 
             @skip_ref_once = nil
-            result(instance, instance_location, keyword_location, nested.all?(&.valid), nested)
+            result(instance, instance_location, location, nested.all?(&.valid), nested)
           end
         end
 
         # AnyOf with discriminator support
         class AnyOf < Draft202012::Vocab::Applicator::AnyOf
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             return nil if schema.parsed.has_key?("discriminator")
             super
           end
@@ -40,7 +40,7 @@ module JsonSchemer
 
         # OneOf with discriminator support
         class OneOf < Draft202012::Vocab::Applicator::OneOf
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             return nil if schema.parsed.has_key?("discriminator")
             super
           end
@@ -60,21 +60,21 @@ module JsonSchemer
             value.as_h["mapping"]?.try(&.as_h) || {} of String => JSON::Any
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, false)
+              return result(instance, instance_location, location, false)
             end
 
             property_name = value.as_h["propertyName"].as_s
             unless instance.as_h.has_key?(property_name)
-              return result(instance, instance_location, keyword_location, false)
+              return result(instance, instance_location, location, false)
             end
 
             property_value = instance.as_h[property_name].as_s?
-            return result(instance, instance_location, keyword_location, false) unless property_value
+            return result(instance, instance_location, location, false) unless property_value
 
             subschema = resolve_subschema(property_value)
-            return result(instance, instance_location, keyword_location, false) unless subschema
+            return result(instance, instance_location, location, false) unless subschema
 
             return nil if skip_ref_once == subschema.absolute_keyword_location
 
@@ -83,10 +83,10 @@ module JsonSchemer
               all_of_kw.skip_ref_once = schema.absolute_keyword_location
             end
 
-            subschema_result = subschema.validate_instance(instance, instance_location, keyword_location, context)
+            subschema_result = subschema.validate_instance(instance, instance_location, context)
             @skip_ref_once = nil
 
-            result(instance, instance_location, keyword_location, subschema_result.valid, subschema_result.nested)
+            result(instance, instance_location, location, subschema_result.valid, subschema_result.nested)
           end
 
           private def resolve_subschema(property_value : String) : Schema?

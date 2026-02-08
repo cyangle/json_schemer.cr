@@ -18,9 +18,9 @@ module JsonSchemer
             @subschema = subschema(value)
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             unevaluated_items = Set(Int32).new
@@ -31,18 +31,17 @@ module JsonSchemer
             end)
 
             items_schema = @subschema
-            return result(instance, instance_location, keyword_location, true) unless items_schema
+            return result(instance, instance_location, location, true) unless items_schema
             nested = unevaluated_items.map do |index|
               items_schema.validate_instance(
                 instance.as_a[index],
                 join_location(instance_location, index.to_s),
-                keyword_location,
                 context
               )
             end
 
             anno = !nested.empty?
-            result(instance, instance_location, keyword_location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(anno))
+            result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(anno))
           end
 
           private def collect_unevaluated_items(res : Result, unevaluated_items : Set(Int32))
@@ -89,9 +88,9 @@ module JsonSchemer
             @subschema = subschema(value)
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             evaluated_keys = Set(String).new
@@ -101,19 +100,19 @@ module JsonSchemer
             end)
 
             props_schema = @subschema
-            return result(instance, instance_location, keyword_location, true) unless props_schema
+            return result(instance, instance_location, location, true) unless props_schema
             evaluated = {} of String => JSON::Any
             nested = [] of Result
 
             instance.as_h.each do |key, val|
               unless evaluated_keys.includes?(key)
                 evaluated[key] = val
-                nested << props_schema.validate_instance(val, join_location(instance_location, key), keyword_location, context)
+                nested << props_schema.validate_instance(val, join_location(instance_location, key), context)
               end
             end
 
             anno = JSON::Any.new(evaluated.keys.map { |k| JSON::Any.new(k) })
-            result(instance, instance_location, keyword_location, nested.all?(&.valid), nested, result_annotation: anno)
+            result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: anno)
           end
 
           private def collect_evaluated_keys(res : Result, evaluated_keys : Set(String))
