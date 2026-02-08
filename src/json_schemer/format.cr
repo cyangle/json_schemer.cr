@@ -43,7 +43,7 @@ module JsonSchemer
     # Percent encode helper
     def self.percent_encode(data : String, regexp : Regex) : String
       data.gsub(regexp) do |match|
-        match.bytes.map { |b| "%%%02X" % b }.join
+        match.bytes.map { |byte| "%%%02X" % byte }.join
       end
     end
 
@@ -172,19 +172,17 @@ module JsonSchemer
 
     # Validates an IP address (IPv4 or IPv6).
     def self.valid_ip?(data : String, family : Socket::Family) : Bool
-      begin
-        addr = Socket::IPAddress.new(data, 0)
-        case family
-        when Socket::Family::INET
-          addr.family == Socket::Family::INET
-        when Socket::Family::INET6
-          addr.family == Socket::Family::INET6
-        else
-          false
-        end
-      rescue
+      addr = Socket::IPAddress.new(data, 0)
+      case family
+      when Socket::Family::INET
+        addr.family == Socket::Family::INET
+      when Socket::Family::INET6
+        addr.family == Socket::Family::INET6
+      else
         false
       end
+    rescue
+      false
     end
 
     # Characters disallowed in URIs per RFC 3986
@@ -201,7 +199,8 @@ module JsonSchemer
       begin
         uri = URI.parse(data)
         return false if INVALID_QUERY_REGEX.matches?(uri.query || "")
-        !uri.scheme.nil? && !uri.scheme.not_nil!.empty?
+        scheme = uri.scheme
+        !scheme.nil? && !scheme.empty?
       rescue
         false
       end
@@ -304,18 +303,16 @@ module JsonSchemer
         ip_literal = domain_part[1...-1]
         if ip_literal.starts_with?("IPv6:")
           # IPv6 address
-          return valid_ip?(ip_literal[5..], Socket::Family::INET6)
+          valid_ip?(ip_literal[5..], Socket::Family::INET6)
         else
           # IPv4 address
-          return valid_ip?(ip_literal, Socket::Family::INET)
+          valid_ip?(ip_literal, Socket::Family::INET)
         end
       else
         # Domain name - must not contain = or other invalid chars
         return false if domain_part.includes?('=')
-        return valid_hostname?(domain_part)
+        valid_hostname?(domain_part)
       end
-
-      true
     end
 
     # Validates an internationalized email address (IDN email).
@@ -335,8 +332,8 @@ module JsonSchemer
         return false if local_part.starts_with?('.') || local_part.ends_with?('.')
         return false if local_part.includes?("..")
         # Allow Unicode letters and common email special chars
-        local_part.each_char do |c|
-          unless c.letter? || c.ascii_number? || ".!#$%&'*+/=?^_`{|}~-".includes?(c)
+        local_part.each_char do |char|
+          unless char.letter? || char.ascii_number? || ".!#$%&'*+/=?^_`{|}~-".includes?(char)
             return false
           end
         end
@@ -346,16 +343,14 @@ module JsonSchemer
       if domain_part.starts_with?('[') && domain_part.ends_with?(']')
         ip_literal = domain_part[1...-1]
         if ip_literal.starts_with?("IPv6:")
-          return valid_ip?(ip_literal[5..], Socket::Family::INET6)
+          valid_ip?(ip_literal[5..], Socket::Family::INET6)
         else
-          return valid_ip?(ip_literal, Socket::Family::INET)
+          valid_ip?(ip_literal, Socket::Family::INET)
         end
       else
         # For IDN hostnames, allow Unicode letters
-        return valid_idn_hostname?(domain_part)
+        valid_idn_hostname?(domain_part)
       end
-
-      true
     end
 
     # Validates a UUID.

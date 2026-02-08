@@ -7,7 +7,7 @@ describe "Configuration Options" do
   describe "keywords option" do
     it "accepts keywords option without error" do
       custom_keywords = {
-        "x-custom" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+        "x-custom" => ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
           true.as(Bool | Array(String))
         },
       }
@@ -22,10 +22,10 @@ describe "Configuration Options" do
 
     it "accepts multiple custom keywords" do
       custom_keywords = {
-        "x-starts-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+        "x-starts-with" => ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
           true.as(Bool | Array(String))
         },
-        "x-ends-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+        "x-ends-with" => ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
           true.as(Bool | Array(String))
         },
       }
@@ -40,7 +40,7 @@ describe "Configuration Options" do
 
     it "stores keywords in configuration" do
       custom_keywords = {
-        "x-test" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+        "x-test" => ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
           true.as(Bool | Array(String))
         },
       }
@@ -55,7 +55,7 @@ describe "Configuration Options" do
 
     it "validates normally when custom keywords option is provided" do
       custom_keywords = {
-        "x-custom" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+        "x-custom" => ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
           true.as(Bool | Array(String))
         },
       }
@@ -75,7 +75,7 @@ describe "Configuration Options" do
       it "calls custom validator and passes when returning true" do
         called = false
         custom_keywords = {
-          "x-always-valid" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-always-valid" => ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             called = true
             true.as(Bool | Array(String))
           },
@@ -92,7 +92,7 @@ describe "Configuration Options" do
 
       it "calls custom validator and fails when returning error array" do
         custom_keywords = {
-          "x-must-be-hello" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-must-be-hello" => ->(instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             if instance.as_s? == "hello"
               true.as(Bool | Array(String))
             else
@@ -113,7 +113,7 @@ describe "Configuration Options" do
       it "receives correct instance value" do
         received_instance = nil
         custom_keywords = {
-          "x-capture" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-capture" => ->(instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             received_instance = instance
             true.as(Bool | Array(String))
           },
@@ -131,7 +131,7 @@ describe "Configuration Options" do
       it "receives correct schema value" do
         received_schema = nil
         custom_keywords = {
-          "x-capture-schema" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-capture-schema" => ->(_instance : JSON::Any, schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             received_schema = schema
             true.as(Bool | Array(String))
           },
@@ -151,7 +151,7 @@ describe "Configuration Options" do
       it "receives correct pointer for root instance" do
         received_pointer = nil
         custom_keywords = {
-          "x-capture-pointer" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-capture-pointer" => ->(_instance : JSON::Any, _schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
             received_pointer = pointer
             true.as(Bool | Array(String))
           },
@@ -168,7 +168,7 @@ describe "Configuration Options" do
 
       it "validates string must start with prefix" do
         custom_keywords = {
-          "x-starts-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-starts-with" => ->(instance : JSON::Any, schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             prefix = schema.as_s
             if str = instance.as_s?
               if str.starts_with?(prefix)
@@ -194,7 +194,7 @@ describe "Configuration Options" do
 
       it "validates with multiple custom keywords" do
         custom_keywords = {
-          "x-min-length" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-min-length" => ->(instance : JSON::Any, schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             min = schema.as_i
             if str = instance.as_s?
               if str.size >= min
@@ -206,7 +206,7 @@ describe "Configuration Options" do
               true.as(Bool | Array(String))
             end
           },
-          "x-max-length" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-max-length" => ->(instance : JSON::Any, schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             max = schema.as_i
             if str = instance.as_s?
               if str.size <= max
@@ -232,7 +232,7 @@ describe "Configuration Options" do
 
       it "includes error details in validation result" do
         custom_keywords = {
-          "x-must-be-even" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-must-be-even" => ->(instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             if num = instance.as_i64?
               if num.even?
                 true.as(Bool | Array(String))
@@ -260,7 +260,7 @@ describe "Configuration Options" do
 
       it "works with nested properties" do
         custom_keywords = {
-          "x-uppercase" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-uppercase" => ->(instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             if str = instance.as_s?
               if str == str.upcase
                 true.as(Bool | Array(String))
@@ -289,7 +289,7 @@ describe "Configuration Options" do
 
       it "empty error array is treated as valid" do
         custom_keywords = {
-          "x-empty-errors" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          "x-empty-errors" => ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             ([] of String).as(Bool | Array(String))
           },
         }
@@ -306,7 +306,7 @@ describe "Configuration Options" do
 
   describe "property_default_resolver option" do
     it "accepts property_default_resolver option without error" do
-      resolver = ->(value : JSON::Any, property : String, results : Array(Tuple(JsonSchemer::Result, Bool))) {
+      resolver = ->(_value : JSON::Any, _property : String, _results : Array(Tuple(JsonSchemer::Result, Bool))) {
         true
       }
 
@@ -319,7 +319,7 @@ describe "Configuration Options" do
     end
 
     it "stores property_default_resolver in configuration" do
-      resolver = ->(value : JSON::Any, property : String, results : Array(Tuple(JsonSchemer::Result, Bool))) {
+      resolver = ->(_value : JSON::Any, _property : String, _results : Array(Tuple(JsonSchemer::Result, Bool))) {
         true
       }
 
@@ -332,7 +332,7 @@ describe "Configuration Options" do
     end
 
     it "validates normally when property_default_resolver is provided" do
-      resolver = ->(value : JSON::Any, property : String, results : Array(Tuple(JsonSchemer::Result, Bool))) {
+      resolver = ->(_value : JSON::Any, _property : String, _results : Array(Tuple(JsonSchemer::Result, Bool))) {
         true
       }
 
@@ -414,7 +414,7 @@ describe "Configuration Options" do
 
       begin
         JsonSchemer.configure do |config|
-          config.keywords["x-global"] = ->(instance : JSON::Any, schema : JSON::Any, pointer : String, _keyword : JsonSchemer::Keyword) {
+          config.keywords["x-global"] = ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             true.as(Bool | Array(String))
           }
         end

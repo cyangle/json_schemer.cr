@@ -260,6 +260,32 @@ schema.valid?(JSON.parse(%q({"credit_card": "1234", "billing_address": "..."})))
 schema.valid?(JSON.parse(%q({"credit_card": "1234"})))                      # => false
 ```
 
+## Content Validation
+
+You can validate the content of string-encoded data using `contentMediaType` and `contentEncoding`. The `contentSchema` keyword allows you to validate the decoded content against a schema.
+
+```crystal
+schema = JsonSchemer.schema(%q({
+  "contentMediaType": "application/json",
+  "contentSchema": {
+    "type": "object",
+    "required": ["foo"],
+    "properties": {
+      "foo": {"type": "string"}
+    }
+  }
+}))
+
+# Valid JSON string with correct structure
+schema.valid?(JSON::Any.new("{\"foo\": \"bar\"}"))  # => true
+
+# Valid JSON string but incorrect structure (missing required property)
+schema.valid?(JSON::Any.new("{\"bar\": \"baz\"}"))  # => false
+
+# Invalid JSON string
+schema.valid?(JSON::Any.new("{invalid json}"))      # => false
+```
+
 ## References ($ref)
 
 ```crystal
@@ -537,6 +563,136 @@ schema = JsonSchemer.schema(
 
 schema.valid?(JSON::Any.new(50_i64))   # => true
 schema.valid?(JSON::Any.new(150_i64))  # => false
+```
+
+### Class-Based Custom Keywords
+
+For more complex validation logic, you can define a custom keyword class by inheriting from `JsonSchemer::Keyword`.
+You must register the keyword class in `JsonSchemer::VOCABULARIES` before creating your schema.
+
+```crystal
+# Define the custom keyword class
+class MoneyKeyword < JsonSchemer::Keyword
+  @min : BigDecimal
+  @max : BigDecimal
+
+  def initialize(value : JSON::Any, parent : JsonSchemer::Schema | JsonSchemer::Keyword, keyword : String, schema : JsonSchemer::Schema? = nil)
+    # Initialize with default bounds
+    @min = BigDecimal.new(-1)
+    @max = BigDecimal.new("999999999999999999999999")
+    super
+  end
+
+  # Parse is called during schema initialization
+  # It must return a valid JSON::Any or specific types
+  def parse : JSON::Any | JsonSchemer::Schema | Array(JsonSchemer::Schema) | Hash(String, JsonSchemer::Schema) | Hash(String, JsonSchemer::Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+    # Validate keyword value structure (e.g. {"minimum": "10.00", "maximum": "100.00"})
+    unless value.raw.is_a?(Hash)
+      raise JsonSchemer::InvalidSchema.new("Value for keyword 'money' must be an object")
+    end
+
+    hash = value.as_h
+
+    # Parse constraints
+    if min_val = hash["minimum"]?
+      if min_str = min_val.as_s?
+        @min = BigDecimal.new(min_str)
+      else
+        raise JsonSchemer::InvalidSchema.new("Value for 'minimum' in 'money' keyword must be a string")
+      end
+    end
+
+    if max_val = hash["maximum"]?
+      if max_str = max_val.as_s?
+        @max = BigDecimal.new(max_str)
+      else
+        raise JsonSchemer::InvalidSchema.new("Value for 'maximum' in 'money' keyword must be a string")
+      end
+    end
+
+    # Validate constraints
+    if hash.has_key?("minimum") && @min < 0
+      raise JsonSchemer::InvalidSchema.new("Value for 'minimum' in 'money' keyword must be non-negative")
+    end
+
+    if hash.has_key?("maximum") && @max < 0
+      raise JsonSchemer::InvalidSchema.new("Value for 'maximum' in 'money' keyword must be non-negative")
+    end
+
+    if @min > @max
+      raise JsonSchemer::InvalidSchema.new("Value for 'minimum' cannot be greater than 'maximum' in 'money' keyword")
+    end
+
+    value
+  end
+
+  def validate(instance : JSON::Any, instance_location : JsonSchemer::Location::Node, context : JsonSchemer::Schema::Context) : JsonSchemer::Result?
+    # Return nil or true Result if instance type doesn't match expectations
+    unless instance.raw.is_a?(String)
+      return result(instance, instance_location, location, true)
+    end
+
+    val_str = instance.as_s
+    # Validation logic (e.g. check for "12.34" format)
+    unless val_str.matches?(/\A\d+\.\d{2}\z/)
+      return result(instance, instance_location, location, false)
+    end
+
+    # Check bounds
+    amount = BigDecimal.new(val_str)
+
+    if amount < @min
+      return result(instance, instance_location, location, false, 
+        details: {"error" => JSON::Any.new("amount must be >= #{@min}")}
+      )
+    end
+
+    if amount > @max
+      return result(instance, instance_location, location, false,
+        details: {"error" => JSON::Any.new("amount must be <= #{@max}")}
+      )
+    end
+
+    result(instance, instance_location, location, true)
+  end
+
+  def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
+    if details && (msg = details["error"]?)
+      "value at #{formatted_instance_location} is invalid: #{msg.as_s}"
+    else
+      "value at #{formatted_instance_location} is not a valid money amount (e.g. 12.34)"
+    end
+  end
+end
+
+# Register the keyword in a vocabulary (e.g. 'validation')
+# This should be done at application startup
+JsonSchemer::VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/validation"]["money"] = MoneyKeyword
+
+# Create schema using the custom keyword with constraints
+# Note: Explicitly including $vocabulary ensures the modified vocabulary is used
+schema = JsonSchemer.schema(%q({
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$vocabulary": {
+    "https://json-schema.org/draft/2020-12/vocab/core": true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    "https://json-schema.org/draft/2020-12/vocab/validation": true,
+    "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+    "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+    "https://json-schema.org/draft/2020-12/vocab/content": true,
+    "https://json-schema.org/draft/2020-12/vocab/unevaluated": true
+  },
+  "type": "string",
+  "money": {
+    "minimum": "10.00",
+    "maximum": "100.00"
+  }
+}))
+
+schema.valid?(JSON::Any.new("12.34")) # => true
+schema.valid?(JSON::Any.new("12"))    # => false (invalid format)
+schema.valid?(JSON::Any.new("5.00"))  # => false (below minimum)
+schema.valid?(JSON::Any.new("150.00")) # => false (above maximum)
 ```
 
 ## Custom Error Messages

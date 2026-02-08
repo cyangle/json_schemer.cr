@@ -106,7 +106,7 @@ module JsonSchemer
 
       # Handle unicode escapes \u{XXXX} or \uXXXX
       result = result.gsub(UNICODE_ESCAPES) do |match|
-        hex = match.match(UNICODE_ESCAPES).not_nil![1]
+        hex = match.match!(UNICODE_ESCAPES)[1]
         codepoint = hex.to_i(16)
         if codepoint <= 0xFFFF
           "\\u#{hex.rjust(4, '0')}"
@@ -125,7 +125,7 @@ module JsonSchemer
     # Convert Unicode property names from ECMA-262 (long names) to PCRE2 (short names)
     private def self.convert_unicode_properties(pattern : String) : String
       result = pattern.gsub(UNICODE_PROPERTY_PATTERN) do |match|
-        m = match.match(UNICODE_PROPERTY_PATTERN).not_nil!
+        m = match.match!(UNICODE_PROPERTY_PATTERN)
         prop_name = m[1]
         prefix = match[0..1] # \p or \P
 

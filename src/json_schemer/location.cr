@@ -15,7 +15,11 @@ module JsonSchemer
 
       def resolve : String
         @resolved ||= if p = @parent
-                        "#{p.resolve}/#{Location.escape_json_pointer_token(@name.not_nil!)}"
+                        if name = @name
+                          "#{p.resolve}/#{Location.escape_json_pointer_token(name)}"
+                        else
+                          ""
+                        end
                       else
                         ""
                       end
@@ -23,8 +27,8 @@ module JsonSchemer
 
       # Get or create a child node
       def join(name : String) : Node
-        @children ||= {} of String => Node
-        @children.not_nil![name] ||= Node.new(name, self)
+        children = (@children ||= {} of String => Node)
+        children[name] ||= Node.new(name, self)
       end
 
       @children : Hash(String, Node)?

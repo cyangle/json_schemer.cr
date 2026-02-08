@@ -183,6 +183,18 @@ describe JsonSchemer do
       schema.valid?(JSON.parse("[1, 2, 2]")).should be_false
     end
 
+    it "validates uniqueItems with empty and single-element arrays" do
+      schema = JsonSchemer.schema(JSON.parse(%q({"type": "array", "uniqueItems": true})).as_h)
+      schema.valid?(JSON.parse("[]")).should be_true
+      schema.valid?(JSON.parse("[1]")).should be_true
+    end
+
+    it "validates uniqueItems with complex objects" do
+      schema = JsonSchemer.schema(JSON.parse(%q({"type": "array", "uniqueItems": true})).as_h)
+      schema.valid?(JSON.parse(%q([{"a": 1}, {"a": 2}]))).should be_true
+      schema.valid?(JSON.parse(%q([{"a": 1}, {"a": 1}]))).should be_false
+    end
+
     it "validates items schema" do
       schema = JsonSchemer.schema(JSON.parse(%q({"type": "array", "items": {"type": "integer"}})).as_h)
       schema.valid?(JSON.parse("[1, 2, 3]")).should be_true
@@ -277,6 +289,36 @@ describe JsonSchemer do
       schema.valid?(JSON.parse(%q({"foo": 1, "bar": 2}))).should be_true
       schema.valid?(JSON.parse(%q({"Foo": 1}))).should be_false
     end
+
+    it "validates dependencies with array requirements" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "type": "object",
+        "dependencies": {
+          "bar": ["foo"]
+        }
+      })).as_h)
+
+      # bar present without foo - invalid
+      schema.valid?(JSON.parse(%q({"bar": 1}))).should be_false
+
+      # bar present with foo - valid
+      schema.valid?(JSON.parse(%q({"bar": 1, "foo": 2}))).should be_true
+
+      # bar not present - valid (dependency doesn't apply)
+      schema.valid?(JSON.parse(%q({"other": 1}))).should be_true
+    end
+
+    it "validates dependencies with schema requirements" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "type": "object",
+        "dependencies": {
+          "bar": {"required": ["foo"]}
+        }
+      })).as_h)
+
+      schema.valid?(JSON.parse(%q({"bar": 1}))).should be_false
+      schema.valid?(JSON.parse(%q({"bar": 1, "foo": 2}))).should be_true
+    end
   end
 
   describe "combinators" do
@@ -291,6 +333,42 @@ describe JsonSchemer do
       schema.valid?(JSON.parse(%q({}))).should be_false
     end
 
+    it "validates allOf with short-circuit mode" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "allOf": [
+          {"type": "string"},
+          {"minLength": 5}
+        ]
+      })).as_h)
+
+      # Test with flag output (short_circuit mode)
+      result = schema.validate(JSON::Any.new(42_i64), output_format: "flag")
+      result["valid"].as_bool.should be_false
+    end
+
+    it "validates allOf collects nested results in non-short-circuit mode" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "allOf": [
+          {"type": "string"},
+          {"minLength": 10}
+        ]
+      })).as_h)
+
+      result = schema.validate(JSON::Any.new("short"), output_format: "classic")
+      errors = get_errors(result)
+      # Should have error for minLength failure
+      errors.any? { |e| e["schema_pointer"].as_s.includes?("allOf/1") }.should be_true
+    end
+
+    it "validates empty allOf array (vacuous truth)" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "allOf": []
+      })).as_h)
+
+      schema.valid?(JSON::Any.new("anything")).should be_true
+      schema.valid?(JSON::Any.new(42_i64)).should be_true
+    end
+
     it "validates anyOf" do
       schema = JsonSchemer.schema(JSON.parse(%q({
         "anyOf": [
@@ -303,6 +381,19 @@ describe JsonSchemer do
       schema.valid?(JSON::Any.new(true)).should be_false
     end
 
+    it "validates anyOf with multiple matching schemas" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "anyOf": [
+          {"type": "string"},
+          {"type": "integer"}
+        ]
+      })).as_h)
+
+      schema.valid?(JSON::Any.new("hello")).should be_true
+      schema.valid?(JSON::Any.new(42_i64)).should be_true
+      schema.valid?(JSON::Any.new(42.5)).should be_false
+    end
+
     it "validates oneOf" do
       schema = JsonSchemer.schema(JSON.parse(%q({
         "oneOf": [
@@ -313,6 +404,37 @@ describe JsonSchemer do
       schema.valid?(JSON::Any.new(5_i64)).should be_true
       schema.valid?(JSON::Any.new(-5_i64)).should be_true
       schema.valid?(JSON::Any.new(0_i64)).should be_false # matches both
+    end
+
+    it "validates oneOf short-circuits when more than one schema matches" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "oneOf": [
+          {"type": "integer"},
+          {"type": "number"},
+          {"type": "string"}
+        ]
+      })).as_h)
+
+      # Integer matches both "integer" and "number" types
+      schema.valid?(JSON::Any.new(42_i64)).should be_false
+    end
+
+    it "validates oneOf passes when exactly one schema matches" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "oneOf": [
+          {"type": "string", "minLength": 5},
+          {"type": "string", "maxLength": 3}
+        ]
+      })).as_h)
+
+      # "hi" matches only maxLength: 3
+      schema.valid?(JSON::Any.new("hi")).should be_true
+
+      # "hello world" matches only minLength: 5
+      schema.valid?(JSON::Any.new("hello world")).should be_true
+
+      # "test" matches neither (length 4)
+      schema.valid?(JSON::Any.new("test")).should be_false
     end
 
     it "validates not" do
@@ -597,6 +719,99 @@ describe JsonSchemer do
       schema.valid?(JSON.parse(%q([1, 2]))).should be_true
       schema.valid?(JSON.parse(%q([]))).should be_false
       schema.valid?(JSON.parse(%q([1, 2, 3]))).should be_false
+    end
+  end
+
+  describe "content validation" do
+    it "validates contentSchema when contentMediaType is present" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "contentMediaType": "application/json",
+        "contentSchema": {
+          "type": "object",
+          "required": ["name"]
+        }
+      })).as_h, content_media_types: {
+        "application/json" => ->(instance : String) {
+          begin
+            parsed = JSON.parse(instance)
+            {true, parsed}
+          rescue
+            {false, nil}
+          end
+        },
+      })
+
+      # Valid JSON that matches the schema
+      schema.valid?(JSON::Any.new(%q({"name": "test"}))).should be_true
+
+      # Valid JSON but doesn't match schema (missing required 'name')
+      # Note: contentSchema is annotation-only by default in 2020-12
+      result = schema.validate(JSON::Any.new(%q({"other": "value"})), output_format: "basic")
+      result["valid"].as_bool.should be_true # annotation-only mode
+    end
+
+    it "handles contentSchema without contentMediaType" do
+      # contentSchema alone should be treated as annotation only
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "contentSchema": {
+          "type": "string"
+        }
+      })).as_h)
+
+      schema.valid?(JSON::Any.new("test")).should be_true
+      schema.valid?(JSON::Any.new(42_i64)).should be_true
+    end
+
+    it "validates contentMediaType without contentSchema" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "contentMediaType": "application/json"
+      })).as_h, content_media_types: {
+        "application/json" => ->(instance : String) {
+          begin
+            parsed = JSON.parse(instance)
+            {true, parsed}
+          rescue
+            {false, nil}
+          end
+        },
+      })
+
+      schema.valid?(JSON::Any.new(%q({"valid": "json"}))).should be_true
+      schema.valid?(JSON::Any.new("not json {")).should be_true # annotation-only
+    end
+
+    it "validates contentEncoding with contentMediaType chain" do
+      schema = JsonSchemer.schema(JSON.parse(%q({
+        "contentEncoding": "base64",
+        "contentMediaType": "application/json",
+        "contentSchema": {
+          "type": "object"
+        }
+      })).as_h,
+        content_encodings: {
+          "base64" => ->(instance : String) {
+            begin
+              decoded = Base64.decode_string(instance)
+              {true, decoded}
+            rescue
+              {false, nil}
+            end
+          },
+        },
+        content_media_types: {
+          "application/json" => ->(instance : String) {
+            begin
+              parsed = JSON.parse(instance)
+              {true, parsed}
+            rescue
+              {false, nil}
+            end
+          },
+        })
+
+      # Base64 encoded JSON: {"test": 1}
+      encoded = Base64.strict_encode(%q({"test": 1}))
+      schema.valid?(JSON::Any.new(encoded)).should be_true
     end
   end
 

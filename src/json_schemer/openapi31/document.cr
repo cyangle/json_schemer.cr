@@ -66,7 +66,7 @@ module JsonSchemer
         "$schema" => JSON::Any.new("https://json-schema.org/draft/2020-12/schema"),
         "$defs"   => JSON::Any.new({
           "dialect" => JSON::Any.new({
-            "enum" => JSON::Any.new(DIALECTS.map { |d| JSON::Any.new(d) }),
+            "enum" => JSON::Any.new(DIALECTS.map { |dialect| JSON::Any.new(dialect) }),
           }),
         }),
         "properties" => JSON::Any.new({

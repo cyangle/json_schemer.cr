@@ -174,7 +174,7 @@ describe "$ref Resolution" do
     it "raises InvalidRefResolution when resolver returns nil" do
       schema = JsonSchemer.schema(
         {"$ref" => JSON::Any.new("http://example.com")},
-        ref_resolver: ->(uri : URI) { nil.as(JsonSchemer::JSONHash?) }
+        ref_resolver: ->(_uri : URI) { nil.as(JsonSchemer::JSONHash?) }
       )
 
       expect_raises(JsonSchemer::InvalidRefResolution) do

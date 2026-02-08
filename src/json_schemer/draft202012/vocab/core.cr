@@ -44,9 +44,9 @@ module JsonSchemer
 
             index = 0
             sorted_vocabs.each do |_vocab, vocab_keywords|
-              vocab_keywords.each do |kw, klass|
-                keywords[kw] = klass
-                keyword_order[kw] = index
+              vocab_keywords.each do |keyword, klass|
+                keywords[keyword] = klass
+                keyword_order[keyword] = index
                 index += 1
               end
             end
@@ -96,8 +96,8 @@ module JsonSchemer
             @ref_schema ||= root.resolve_ref(ref_uri)
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            ref_schema.validate_instance(instance, instance_location, keyword_location, context)
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            ref_schema.validate_instance(instance, instance_location, context)
           end
 
           private def resolve_uri_reference(base : URI, ref_str : String) : URI
@@ -154,7 +154,7 @@ module JsonSchemer
             @dynamic_anchor
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             resolved_schema = ref_schema
 
             if anchor = dynamic_anchor
@@ -168,7 +168,7 @@ module JsonSchemer
               end
             end
 
-            resolved_schema.validate_instance(instance, instance_location, keyword_location, context)
+            resolved_schema.validate_instance(instance, instance_location, context)
           end
 
           private def resolve_uri_reference(base : URI, ref_str : String) : URI
@@ -253,35 +253,35 @@ module JsonSchemer
             @parsed_schema ||= subschema(value)
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             # Check if there's a custom validator for this keyword
             custom_validators = root.configuration.keywords
             if custom_validator = custom_validators[keyword]?
-              # Call the custom validator: (instance, schema_value, pointer, keyword) -> Bool | Array(String)
+              # Call custom validator: (instance, schema_value, pointer, keyword) -> Bool | Array(String)
               pointer = Location.resolve(instance_location)
               validator_result = custom_validator.call(instance, value, pointer, self)
 
               case validator_result
               when true
-                result(instance, instance_location, keyword_location, true, result_annotation: value)
+                result(instance, instance_location, location, true, result_annotation: value)
               when Array
                 # Array of error strings means validation failed
                 errors = validator_result.as(Array(String))
                 if errors.empty?
-                  result(instance, instance_location, keyword_location, true, result_annotation: value)
+                  result(instance, instance_location, location, true, result_annotation: value)
                 else
-                  result(instance, instance_location, keyword_location, false,
+                  result(instance, instance_location, location, false,
                     type: keyword,
                     details: {"errors" => JSON::Any.new(errors.map { |e| JSON::Any.new(e) })}
                   )
                 end
               else
                 # false or unexpected type means invalid
-                result(instance, instance_location, keyword_location, false, type: keyword)
+                result(instance, instance_location, location, false, type: keyword)
               end
             else
               # No custom validator - return valid with annotation (default behavior)
-              result(instance, instance_location, keyword_location, true, result_annotation: value)
+              result(instance, instance_location, location, true, result_annotation: value)
             end
           end
 

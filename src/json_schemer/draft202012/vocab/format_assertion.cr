@@ -17,7 +17,7 @@ module JsonSchemer
             value
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             format_name = value.as_s
 
             # Try to find the format validator
@@ -27,17 +27,17 @@ module JsonSchemer
               {% if flag?(:with_simpleidn) %}
                 begin
                   valid = validator.call(instance, format_name)
-                  result(instance, instance_location, keyword_location, valid, type: "format", result_annotation: value)
+                  result(instance, instance_location, location, valid, type: "format", result_annotation: value)
                 rescue ex : SimpleIDN::ConversionError
-                  result(instance, instance_location, keyword_location, false, type: "format", details: {"error" => JSON::Any.new(ex.message)})
+                  result(instance, instance_location, location, false, type: "format", details: {"error" => JSON::Any.new(ex.message)})
                 end
               {% else %}
                 valid = validator.call(instance, format_name)
-                result(instance, instance_location, keyword_location, valid, type: "format", result_annotation: value)
+                result(instance, instance_location, location, valid, type: "format", result_annotation: value)
               {% end %}
             else
               # Unknown format - pass by default
-              result(instance, instance_location, keyword_location, true, result_annotation: value)
+              result(instance, instance_location, location, true, result_annotation: value)
             end
           end
         end

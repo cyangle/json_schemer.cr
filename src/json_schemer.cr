@@ -73,8 +73,10 @@ module JsonSchemer
   # Expects `file://` URIs.
   FILE_URI_REF_RESOLVER = ->(uri : URI) : JSONHash? {
     raise InvalidFileURI.new("must use `file` scheme") unless uri.scheme == "file"
-    raise InvalidFileURI.new("cannot have a host (use `file:///`)") if uri.host && !uri.host.not_nil!.empty?
-    path = uri.path.not_nil!
+    host = uri.host
+    raise InvalidFileURI.new("cannot have a host (use `file:///`)") if host && !host.empty?
+    path = uri.path
+    raise InvalidFileURI.new("must have a path") unless path
     path = path[1..] if path.matches?(WINDOWS_URI_PATH_REGEX)
     JSONHash.from_json(File.read(URI.decode(path)))
   }
@@ -293,10 +295,14 @@ module JsonSchemer
     when Path
       resolved_uri = URI.parse("file:#{URI.encode_path(schema.expand.to_s)}")
       if ref_resolver
-        {FILE_URI_REF_RESOLVER.call(resolved_uri).not_nil!, base_uri || resolved_uri, ref_resolver}
+        resolved_schema = FILE_URI_REF_RESOLVER.call(resolved_uri)
+        raise InvalidRefResolution.new("Failed to resolve file schema: #{resolved_uri}") unless resolved_schema
+        {resolved_schema, base_uri || resolved_uri, ref_resolver}
       else
         cached = CachedRefResolver.new(&FILE_URI_REF_RESOLVER)
-        {cached.call(resolved_uri).not_nil!, base_uri || resolved_uri, cached.to_proc}
+        resolved_schema = cached.call(resolved_uri)
+        raise InvalidRefResolution.new("Failed to resolve file schema: #{resolved_uri}") unless resolved_schema
+        {resolved_schema, base_uri || resolved_uri, cached.to_proc}
       end
     else
       {schema, base_uri, ref_resolver}
