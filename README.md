@@ -2,7 +2,7 @@
 
 A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_schemer) library for validating JSON documents against [JSON Schema](https://json-schema.org/).
 
-[![Crystal Version](https://img.shields.io/badge/crystal-%3E%3D1.18.2-blue.svg)](https://crystal-lang.org)
+[![Crystal Version](https://img.shields.io/badge/crystal-%3E%3D1.19-blue.svg)](https://crystal-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > [!CAUTION]
@@ -21,6 +21,7 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 - ECMA-262 compatible regex patterns
 - `$ref`, `$anchor`, `$dynamicRef` / `$dynamicAnchor` support
 - Complete vocabulary implementations
+- `contentSchema` support for validating content of string-encoded data
 - Custom error messages with `x-error`
 
 ## Installation

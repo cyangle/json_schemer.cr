@@ -260,6 +260,32 @@ schema.valid?(JSON.parse(%q({"credit_card": "1234", "billing_address": "..."})))
 schema.valid?(JSON.parse(%q({"credit_card": "1234"})))                      # => false
 ```
 
+## Content Validation
+
+You can validate the content of string-encoded data using `contentMediaType` and `contentEncoding`. The `contentSchema` keyword allows you to validate the decoded content against a schema.
+
+```crystal
+schema = JsonSchemer.schema(%q({
+  "contentMediaType": "application/json",
+  "contentSchema": {
+    "type": "object",
+    "required": ["foo"],
+    "properties": {
+      "foo": {"type": "string"}
+    }
+  }
+}))
+
+# Valid JSON string with correct structure
+schema.valid?(JSON::Any.new("{\"foo\": \"bar\"}"))  # => true
+
+# Valid JSON string but incorrect structure (missing required property)
+schema.valid?(JSON::Any.new("{\"bar\": \"baz\"}"))  # => false
+
+# Invalid JSON string
+schema.valid?(JSON::Any.new("{invalid json}"))      # => false
+```
+
 ## References ($ref)
 
 ```crystal
@@ -600,34 +626,34 @@ class MoneyKeyword < JsonSchemer::Keyword
     value
   end
 
-  def validate(instance, instance_location, keyword_location, context)
+  def validate(instance : JSON::Any, instance_location : JsonSchemer::Location::Node, context : JsonSchemer::Schema::Context) : JsonSchemer::Result?
     # Return nil or true Result if instance type doesn't match expectations
     unless instance.raw.is_a?(String)
-      return result(instance, instance_location, keyword_location, true)
+      return result(instance, instance_location, location, true)
     end
 
     val_str = instance.as_s
     # Validation logic (e.g. check for "12.34" format)
     unless val_str.matches?(/\A\d+\.\d{2}\z/)
-      return result(instance, instance_location, keyword_location, false)
+      return result(instance, instance_location, location, false)
     end
 
     # Check bounds
     amount = BigDecimal.new(val_str)
 
     if amount < @min
-      return result(instance, instance_location, keyword_location, false, 
+      return result(instance, instance_location, location, false, 
         details: {"error" => JSON::Any.new("amount must be >= #{@min}")}
       )
     end
 
     if amount > @max
-      return result(instance, instance_location, keyword_location, false,
+      return result(instance, instance_location, location, false,
         details: {"error" => JSON::Any.new("amount must be <= #{@max}")}
       )
     end
 
-    result(instance, instance_location, keyword_location, true)
+    result(instance, instance_location, location, true)
   end
 
   def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String

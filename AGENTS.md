@@ -30,6 +30,9 @@ crystal spec -v
 # Run with fail-fast (stop on first failure)
 crystal spec --fail-fast
 
+# Run linter
+./bin/ameba
+
 # Type-check without running (faster feedback)
 crystal build --no-codegen src/json_schemer.cr
 
@@ -172,8 +175,9 @@ All JSON Schema keywords inherit from `Keyword`:
 class MyKeyword < Keyword
   # Override parse to process the keyword value during initialization
   # Return type is a union of possible parsed values
-  protected def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
+  protected def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
     # Parse and return structured data
+    # You can also set instance variables here for efficient validation
     value  # Default: return raw value
   end
 
@@ -181,12 +185,12 @@ class MyKeyword < Keyword
   def validate(
     instance : JSON::Any,
     instance_location : Location::Node,
-    keyword_location : Location::Node,
     context : Schema::Context
   ) : Result?
     # Perform validation, return result
+    # Access keyword location via `location` method
     valid = # ... your validation logic
-    result(instance, instance_location, keyword_location, valid)
+    result(instance, instance_location, location, valid)
   end
 
   # Override error for custom error messages
@@ -196,16 +200,17 @@ class MyKeyword < Keyword
 end
 ```
 
-### Result Creation
+# Result Creation
 Use the `result` method from `Output` module:
 
 ```crystal
-result(instance, instance_location, keyword_location, valid,
+result(instance, instance_location, location, valid,
   nested: nested_results,      # Optional: child results
   type: "keyword_name",        # Optional: for classic output
   details: {"key" => value}    # Optional: additional context
 )
 ```
+
 
 ### Test Structure
 Tests use Crystal's built-in `spec` framework:
