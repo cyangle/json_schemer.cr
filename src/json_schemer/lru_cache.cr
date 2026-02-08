@@ -31,6 +31,32 @@ module JsonSchemer
       end
     end
 
+    # Fetch a value from the cache, returning a tuple of (found, value).
+    # This handles nil values correctly - if found is true, value is the cached value (even if nil).
+    # This is O(1) and updates LRU order when the key exists.
+    def fetch(key : K) : Tuple(Bool, V?)
+      if node = @cache[key]?
+        move_to_front(node)
+        {true, node.value}
+      else
+        {false, nil}
+      end
+    end
+
+    # Fetch a value from the cache, computing and caching it if not present.
+    # The block is only called if the key is not in the cache.
+    # This is O(1) for cache hits and updates LRU order.
+    def fetch(key : K, & : -> V) : V
+      if node = @cache[key]?
+        move_to_front(node)
+        node.value
+      else
+        value = yield
+        set(key, value)
+        value
+      end
+    end
+
     def set(key : K, value : V) : V
       if node = @cache[key]?
         node.value = value
@@ -54,12 +80,6 @@ module JsonSchemer
         @size -= 1
         node.value
       end
-    end
-
-    # Check if a key exists in the cache without affecting LRU order.
-    # This is O(1) and doesn't modify the cache structure.
-    def has_key?(key : K) : Bool
-      @cache.has_key?(key)
     end
 
     def clear

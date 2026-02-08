@@ -21,20 +21,14 @@ module JsonSchemer
     def call(key : URI | String) : T
       key_str = key.to_s
 
-      # Use has_key? to properly handle cached nil values
-      if @cache.has_key?(key_str)
-        return @cache.get(key_str).not_nil!
+      # Use block-based fetch - returns cached value or computes and caches
+      @cache.fetch(key_str) do
+        if key.is_a?(URI)
+          @resolver.as(Proc(URI, T)).call(key)
+        else
+          @resolver.as(Proc(String, T)).call(key)
+        end
       end
-
-      # Resolve and cache the result
-      result = if key.is_a?(URI)
-                 @resolver.as(Proc(URI, T)).call(key)
-               else
-                 @resolver.as(Proc(String, T)).call(key)
-               end
-
-      @cache.set(key_str, result)
-      result
     end
 
     def to_proc : Proc(URI, T) | Proc(String, T)
@@ -63,10 +57,10 @@ module JsonSchemer
     def call(uri : URI) : JSONHash?
       key = uri.to_s
 
-      # Use has_key? to properly handle cached nil values
-      if @cache.has_key?(key)
-        return @cache.get(key)
-      end
+      # Use fetch to get existence + value in one O(1) operation
+      # This correctly handles cached nil values
+      found, cached = @cache.fetch(key)
+      return cached if found
 
       # Resolve and cache the result (including nil)
       result = @resolver.call(uri)
@@ -98,10 +92,10 @@ module JsonSchemer
     end
 
     def call(pattern : String) : Regex?
-      # Use has_key? to properly handle cached nil values
-      if @cache.has_key?(pattern)
-        return @cache.get(pattern)
-      end
+      # Use fetch to get existence + value in one O(1) operation
+      # This correctly handles cached nil values
+      found, cached = @cache.fetch(pattern)
+      return cached if found
 
       # Resolve and cache the result (including nil)
       result = @resolver.call(pattern)
