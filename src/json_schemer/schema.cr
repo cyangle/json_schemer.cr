@@ -103,7 +103,6 @@ module JsonSchemer
     @escaped_keyword : String?
     @ref_resolver : Proc(URI, JSONHash?)?
     @regexp_resolver : Proc(String, Regex?)?
-    @root_keyword_location : Location::Node?
     @needs_adjacent_results : Bool?
 
     # Initializes a new `Schema`.
@@ -284,7 +283,9 @@ module JsonSchemer
                       end
 
       instance_location = Location.root
-      keyword_location = root_keyword_location
+      # Use a fresh root node for keyword_location to avoid mutating shared state
+      # Location::Node#join mutates @children, so we can't share the root across calls
+      keyword_location = Location.root
       context = Context.new(
         json_instance,
         [] of Schema,
@@ -767,10 +768,6 @@ module JsonSchemer
 
       # Warmup caches
       parsed.each_value(&.after_schema_initialize)
-    end
-
-    private def root_keyword_location : Location::Node
-      @root_keyword_location ||= Location.root
     end
   end
 end
