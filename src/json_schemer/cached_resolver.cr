@@ -21,9 +21,9 @@ module JsonSchemer
     def call(key : URI | String) : T
       key_str = key.to_s
 
-      # Try to get from cache first
-      if cached = @cache.get(key_str)
-        return cached
+      # Use has_key? to properly handle cached nil values
+      if @cache.has_key?(key_str)
+        return @cache.get(key_str).not_nil!
       end
 
       # Resolve and cache the result
@@ -63,15 +63,12 @@ module JsonSchemer
     def call(uri : URI) : JSONHash?
       key = uri.to_s
 
-      # Try to get from cache first
-      if @cache.get(key)
+      # Use has_key? to properly handle cached nil values
+      if @cache.has_key?(key)
         return @cache.get(key)
       end
 
-      # Check if key exists (handles nil values being cached)
-      # LRUCache.get returns nil for missing keys, but we might cache nil values
-      # We need to track existence separately or use a sentinel
-      # For simplicity, re-resolve if get returns nil (acceptable trade-off)
+      # Resolve and cache the result (including nil)
       result = @resolver.call(uri)
       @cache.set(key, result)
       result
@@ -101,12 +98,12 @@ module JsonSchemer
     end
 
     def call(pattern : String) : Regex?
-      # Try to get from cache first
-      if cached = @cache.get(pattern)
-        return cached
+      # Use has_key? to properly handle cached nil values
+      if @cache.has_key?(pattern)
+        return @cache.get(pattern)
       end
 
-      # Resolve and cache the result
+      # Resolve and cache the result (including nil)
       result = @resolver.call(pattern)
       @cache.set(pattern, result)
       result

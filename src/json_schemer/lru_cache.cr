@@ -56,6 +56,12 @@ module JsonSchemer
       end
     end
 
+    # Check if a key exists in the cache without affecting LRU order.
+    # This is O(1) and doesn't modify the cache structure.
+    def has_key?(key : K) : Bool
+      @cache.has_key?(key)
+    end
+
     def clear
       @cache.clear
       @head = nil
