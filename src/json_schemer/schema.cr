@@ -756,7 +756,7 @@ module JsonSchemer
       # Parse remaining keywords
       if val.raw.is_a?(Hash)
         # Sort by keyword order
-        sorted_keys = val.as_h.keys.sort_by { |k| keyword_order[k]? || Int32::MAX }
+        sorted_keys = val.as_h.keys.sort_by! { |k| keyword_order[k]? || Int32::MAX }
 
         sorted_keys.each do |kw|
           next if parsed.has_key?(kw)

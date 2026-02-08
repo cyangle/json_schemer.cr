@@ -53,7 +53,7 @@ describe "Memory leak prevention" do
     it "should limit cache size to prevent unbounded memory growth" do
       # Create a resolver that simulates fetching external schemas
       call_count = 0
-      resolver = JsonSchemer::CachedRefResolver.new do |uri|
+      resolver = JsonSchemer::CachedRefResolver.new do |_|
         call_count += 1
         # Return a simple schema for any URI
         {"type" => JSON::Any.new("string")} of String => JSON::Any
@@ -73,7 +73,7 @@ describe "Memory leak prevention" do
 
     it "cached entries should be returned without re-calling resolver" do
       call_count = 0
-      resolver = JsonSchemer::CachedRefResolver.new do |uri|
+      resolver = JsonSchemer::CachedRefResolver.new do |_|
         call_count += 1
         {"type" => JSON::Any.new("object")} of String => JSON::Any
       end

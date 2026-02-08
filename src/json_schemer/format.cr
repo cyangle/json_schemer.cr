@@ -172,19 +172,17 @@ module JsonSchemer
 
     # Validates an IP address (IPv4 or IPv6).
     def self.valid_ip?(data : String, family : Socket::Family) : Bool
-      begin
-        addr = Socket::IPAddress.new(data, 0)
-        case family
-        when Socket::Family::INET
-          addr.family == Socket::Family::INET
-        when Socket::Family::INET6
-          addr.family == Socket::Family::INET6
-        else
-          false
-        end
-      rescue
+      addr = Socket::IPAddress.new(data, 0)
+      case family
+      when Socket::Family::INET
+        addr.family == Socket::Family::INET
+      when Socket::Family::INET6
+        addr.family == Socket::Family::INET6
+      else
         false
       end
+    rescue
+      false
     end
 
     # Characters disallowed in URIs per RFC 3986

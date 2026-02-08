@@ -153,27 +153,25 @@ module JsonSchemer
     end
 
     protected def perform_lookup(hostname : String) : Symbol
-      begin
-        # Note: This is a blocking operation unless `spider-gazelle/dns` is required
-        # with its monkey-patching enabled (`require "dns/ext/addrinfo"`).
-        addresses = Socket::Addrinfo.resolve(
-          hostname,
-          nil,
-          family: Socket::Family::UNSPEC,
-          type: Socket::Type::STREAM
-        )
-        addresses.empty? ? :not_found : :found
-      rescue ex : Socket::Error
-        # Check for NXDOMAIN or "No address found"
-        msg = ex.message || ""
-        if msg.includes?("No address found") || msg.includes?("Name or service not known") || ex.os_error == -2
-          :not_found
-        else
-          :error
-        end
-      rescue
+      # Note: This is a blocking operation unless `spider-gazelle/dns` is required
+      # with its monkey-patching enabled (`require "dns/ext/addrinfo"`).
+      addresses = Socket::Addrinfo.resolve(
+        hostname,
+        nil,
+        family: Socket::Family::UNSPEC,
+        type: Socket::Type::STREAM
+      )
+      addresses.empty? ? :not_found : :found
+    rescue ex : Socket::Error
+      # Check for NXDOMAIN or "No address found"
+      msg = ex.message || ""
+      if msg.includes?("No address found") || msg.includes?("Name or service not known") || ex.os_error == -2
+        :not_found
+      else
         :error
       end
+    rescue
+      :error
     end
   end
 end
