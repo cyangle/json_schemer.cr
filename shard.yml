@@ -6,6 +6,10 @@ authors:
 
 crystal: '>= 1.19.0'
 
+targets:
+  ameba:
+    main: bin/ameba.cr
+
 dependencies:
   hana:
     github: cyangle/hana.cr
@@ -13,5 +17,10 @@ dependencies:
   simpleidn:
     github: cyangle/simpleidn.cr
     version: '>= 0.8.0'
+
+development_dependencies:
+  ameba:
+    github: crystal-ameba/ameba
+    version: '>= 1.6.4'
 
 license: MIT
