@@ -23,6 +23,22 @@ jobs:
       - name: Check format
         run: crystal tool format --check
 
+  lint:
+    name: Ameba Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Crystal
+        uses: crystal-lang/install-crystal@v1
+
+      - name: Install dependencies
+        run: shards install
+
+      - name: Run Ameba
+        run: bin/ameba
+
   test:
     name: Tests (Crystal ${{ matrix.crystal }})
     strategy:
