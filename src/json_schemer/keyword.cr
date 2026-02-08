@@ -7,6 +7,7 @@ module JsonSchemer
     getter parent : Schema | Keyword
     getter root : Schema
     getter keyword : String
+    getter location : Location::Node
     getter parsed : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
 
     @schema : Schema
@@ -17,6 +18,7 @@ module JsonSchemer
     def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
       @root = parent.root
       @schema = schema || (parent.is_a?(Schema) ? parent : parent.schema)
+      @location = @schema.location.join(@keyword)
       parse_result = parse
       # After parse, ensure instance variables are set if they were not nullable
       @parsed = parse_result

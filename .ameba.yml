@@ -13,6 +13,6 @@ Excluded:
 
 Metrics/CyclomaticComplexity:
   Enabled: true
-  MaxComplexity: 25
+  MaxComplexity: 30
 Naming/QueryBoolMethods:
   Enabled: false

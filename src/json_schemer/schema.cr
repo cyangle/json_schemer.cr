@@ -92,6 +92,7 @@ module JsonSchemer
     getter parent : Schema | Keyword | Nil
 
     @keyword : String = ""
+    getter location : Location::Node
 
     def keyword : String
       @keyword
@@ -149,6 +150,17 @@ module JsonSchemer
       resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     )
+      @location = if parent
+                    kw = keyword || ""
+                    if !kw.empty?
+                      parent.location.join(kw)
+                    else
+                      parent.location
+                    end
+                  else
+                    Location.root
+                  end
+
       # Convert value to JSON::Any
       @value = case value
                when JSON::Any
@@ -284,9 +296,7 @@ module JsonSchemer
                       end
 
       instance_location = Location.root
-      # Use a fresh root node for keyword_location to avoid mutating shared state
-      # Location::Node#join mutates @children, so we can't share the root across calls
-      keyword_location = Location.root
+      keyword_location = location
       context = Context.new(
         json_instance,
         [] of Schema,
@@ -300,7 +310,7 @@ module JsonSchemer
     end
 
     # Validate instance (internal)
-    def validate_instance(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Context) : Result
+    def validate_instance(instance : JSON::Any, instance_location : Location::Node, _keyword_location : Location::Node, context : Context) : Result
       context.dynamic_scope.push(self)
       original_adjacent_results = context.adjacent_results
 
@@ -315,26 +325,26 @@ module JsonSchemer
       begin
         # Handle boolean schemas
         if value.raw == false
-          return result(instance, instance_location, keyword_location, false)
+          return result(instance, instance_location, location, false)
         end
         if value.raw == true || (value.raw.is_a?(Hash) && value.as_h.empty?)
-          return result(instance, instance_location, keyword_location, true)
+          return result(instance, instance_location, location, true)
         end
 
         valid = true
         nested = [] of Result
 
         parsed.each_value do |keyword_instance|
-          keyword_result = keyword_instance.validate(instance, instance_location, join_location(keyword_location, keyword_instance.keyword), context)
+          keyword_result = keyword_instance.validate(instance, instance_location, keyword_instance.location, context)
           next unless keyword_result
 
           valid = valid && keyword_result.valid
-          return result(instance, instance_location, keyword_location, false) if short_circuit && !valid
+          return result(instance, instance_location, location, false) if short_circuit && !valid
           nested << keyword_result
           adjacent_results[keyword_instance.class] = keyword_result if adjacent_results
         end
 
-        result(instance, instance_location, keyword_location, valid, nested)
+        result(instance, instance_location, location, valid, nested)
       ensure
         context.dynamic_scope.pop
         context.adjacent_results = original_adjacent_results
