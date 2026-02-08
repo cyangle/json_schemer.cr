@@ -10,3 +10,9 @@ Excluded:
   - lib
   - local
   - spec
+
+Metrics/CyclomaticComplexity:
+  Enabled: true
+  MaxComplexity: 25
+Naming/QueryBoolMethods:
+  Enabled: false
