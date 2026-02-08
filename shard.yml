@@ -1,10 +1,14 @@
 name: json_schemer
-version: 0.5.0
+version: 0.6.0
 
 authors:
   - Chao Yang <cyang05@outlook.com>
 
-crystal: '>= 1.18.2'
+crystal: '>= 1.19.0'
+
+targets:
+  ameba:
+    main: bin/ameba.cr
 
 dependencies:
   hana:
@@ -13,5 +17,10 @@ dependencies:
   simpleidn:
     github: cyangle/simpleidn.cr
     version: '>= 0.8.0'
+
+development_dependencies:
+  ameba:
+    github: crystal-ameba/ameba
+    version: '>= 1.6.4'
 
 license: MIT

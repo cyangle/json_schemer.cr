@@ -51,6 +51,10 @@ module JsonSchemer
   class InvalidEcmaRegexp < Error
   end
 
+  # Raised when a schema keyword value has an invalid type.
+  class InvalidSchema < Error
+  end
+
   # Pretty error formatting helper
   module Errors
     def self.pretty(error : Hash(String, JSON::Any)) : String
@@ -69,23 +73,23 @@ module JsonSchemer
       when "null", "string", "boolean", "integer", "number", "array", "object"
         "#{location} is not of type: #{type}"
       when "pattern"
-        pattern = schema_raw.try do |s|
-          s.as_h?.try(&.["pattern"]?.try(&.as_s))
+        pattern = schema_raw.try do |schema|
+          schema.as_h?.try(&.["pattern"]?.try(&.as_s))
         end || ""
         "#{location} does not match pattern: #{pattern}"
       when "format"
-        format = schema_raw.try do |s|
-          s.as_h?.try(&.["format"]?.try(&.as_s))
+        format = schema_raw.try do |schema|
+          schema.as_h?.try(&.["format"]?.try(&.as_s))
         end || ""
         "#{location} does not match format: #{format}"
       when "const"
-        const_val = schema_raw.try do |s|
-          s.as_h?.try(&.["const"]?)
+        const_val = schema_raw.try do |schema|
+          schema.as_h?.try(&.["const"]?)
         end
         "#{location} is not: #{const_val.inspect}"
       when "enum"
-        enum_val = schema_raw.try do |s|
-          s.as_h?.try(&.["enum"]?)
+        enum_val = schema_raw.try do |schema|
+          schema.as_h?.try(&.["enum"]?)
         end
         "#{location} is not one of: #{enum_val}"
       else

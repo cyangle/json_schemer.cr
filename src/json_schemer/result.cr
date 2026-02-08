@@ -33,8 +33,8 @@ module JsonSchemer
     )
     end
 
-    # Alias for compatibility - note: can't use "annotation" as method name, it's reserved in Crystal
-    def get_annotation : JSON::Any?
+    # Alias for compatibility - provides access to annotation value
+    def annotation : JSON::Any?
       result_annotation
     end
 
@@ -103,7 +103,9 @@ module JsonSchemer
       }
 
       if valid
-        out["annotation"] = result_annotation.not_nil! if result_annotation
+        if ann = result_annotation
+          out["annotation"] = ann
+        end
       else
         out["error"] = JSON::Any.new(error)
       end
@@ -123,7 +125,9 @@ module JsonSchemer
         "type"           => JSON::Any.new(type || classic_error_type),
       }
       out["error"] = JSON::Any.new(error)
-      out["details"] = JSON::Any.new(details.not_nil!.transform_values { |v| v }) if details
+      if det = details
+        out["details"] = JSON::Any.new(det.transform_values { |v| v })
+      end
       out
     end
 
@@ -136,7 +140,7 @@ module JsonSchemer
     def basic : Hash(String, JSON::Any)
       out = to_output_unit
       if n = nested
-        if n.any?
+        unless n.empty?
           errors = [] of Hash(String, JSON::Any)
           collect_basic_errors(errors)
           out[nested_key] = JSON::Any.new(errors.map { |e| JSON::Any.new(e.transform_values { |v| v }) })
@@ -148,8 +152,8 @@ module JsonSchemer
     protected def collect_basic_errors(errors : Array(Hash(String, JSON::Any)))
       if ignore_nested || nested.try(&.empty?) != false
         errors << to_output_unit
-      else
-        nested.not_nil!.each do |result|
+      elsif n = nested
+        n.each do |result|
           if result.valid == valid
             result.collect_basic_errors(errors)
           end
@@ -161,13 +165,15 @@ module JsonSchemer
     def detailed : Hash(String, JSON::Any)
       return to_output_unit if ignore_nested || nested.try(&.empty?) != false
 
-      matching = nested.not_nil!.select { |r| r.valid == valid }
+      n = nested
+      return to_output_unit unless n
+      matching = n.select { |result| result.valid == valid }
       if matching.size == 1
         matching.first.detailed
       else
         out = to_output_unit
-        if matching.any?
-          out[nested_key] = JSON::Any.new(matching.map { |r| JSON::Any.new(r.detailed.transform_values { |v| v }) })
+        unless matching.empty?
+          out[nested_key] = JSON::Any.new(matching.map { |result| JSON::Any.new(result.detailed.transform_values { |v| v }) })
         end
         out
       end
@@ -177,8 +183,8 @@ module JsonSchemer
     def verbose : Hash(String, JSON::Any)
       out = to_output_unit
       if n = nested
-        if n.any?
-          out[nested_key] = JSON::Any.new(n.map { |r| JSON::Any.new(r.verbose.transform_values { |v| v }) })
+        unless n.empty?
+          out[nested_key] = JSON::Any.new(n.map { |result| JSON::Any.new(result.verbose.transform_values { |v| v }) })
         end
       end
       out
@@ -202,9 +208,9 @@ module JsonSchemer
       unless valid
         if ignore_nested || nested.try(&.empty?) != false
           errors << to_classic
-        else
+        elsif n = nested
           added = false
-          nested.not_nil!.each do |result|
+          n.each do |result|
             if result.valid == valid
               result.collect_classic_errors(errors)
               added = true
@@ -225,9 +231,9 @@ module JsonSchemer
     private def collect_and_yield_classic(result : Result, &)
       if result.ignore_nested || result.nested.try(&.empty?) != false
         yield result.to_classic
-      else
+      elsif n = result.nested
         added = false
-        result.nested.not_nil!.each do |nested_result|
+        n.each do |nested_result|
           if nested_result.valid == result.valid
             collect_and_yield_classic(nested_result) { |e| yield e }
             added = true

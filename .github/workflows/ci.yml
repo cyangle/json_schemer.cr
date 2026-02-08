@@ -23,12 +23,28 @@ jobs:
       - name: Check format
         run: crystal tool format --check
 
+  lint:
+    name: Ameba Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Crystal
+        uses: crystal-lang/install-crystal@v1
+
+      - name: Install dependencies
+        run: shards install
+
+      - name: Run Ameba
+        run: bin/ameba
+
   test:
     name: Tests (Crystal ${{ matrix.crystal }})
     strategy:
       fail-fast: false
       matrix:
-        crystal: ["1.18", latest]
+        crystal: ["1.19", latest]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,7 +58,7 @@ jobs:
           crystal: ${{ matrix.crystal }}
 
       - name: Install dependencies
-        run: shards install
+        run: shards install --without-development
 
       - name: Run tests (default)
         run: crystal spec

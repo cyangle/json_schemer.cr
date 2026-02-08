@@ -4,6 +4,9 @@ module JsonSchemer
       module Validation
         # Type keyword
         class Type < Keyword
+          @types : Array(String) = [] of String
+          @single_type : String?
+
           def self.valid_integer?(instance : JSON::Any) : Bool
             case instance.raw
             when Int64
@@ -37,16 +40,24 @@ module JsonSchemer
             end
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            case value.raw
-            when String
-              valid = valid_type(value.as_s, instance)
-              result(instance, instance_location, keyword_location, valid, type: value.as_s)
-            when Array
-              valid = value.as_a.any? { |t| valid_type(t.as_s, instance) }
-              result(instance, instance_location, keyword_location, valid)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            if value.raw.is_a?(Array)
+              @types = value.as_a.map(&.as_s)
+              @types
             else
-              result(instance, instance_location, keyword_location, true)
+              @single_type = value.as_s
+              value
+            end
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            if single = @single_type
+              valid = valid_type(single, instance)
+              result(instance, instance_location, location, valid, type: single)
+            else
+              # Use types array (even if empty, though empty type array is probably invalid schema or matches nothing)
+              valid = @types.any? { |type_str| valid_type(type_str, instance) }
+              result(instance, instance_location, location, valid)
             end
           end
 
@@ -74,16 +85,36 @@ module JsonSchemer
 
         # Enum keyword
         class Enum < Keyword
+          @enum_values : Array(JSON::Any) = [] of JSON::Any
+          @enum_set : Set(JSON::Any)?
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} is not one of: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            if value.raw.nil?
-              result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            # Enum value must be an array
+            if value.raw.is_a?(Array)
+              @enum_values = value.as_a
+              # Optimization: Use Set for large enums (threshold > 10)
+              if @enum_values.size > 10
+                @enum_set = Set(JSON::Any).new(@enum_values)
+              end
+            end
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            if @enum_values.empty? && !value.raw.is_a?(Array)
+              # If value is not an array, we ignore validation
+              result(instance, instance_location, location, true)
             else
-              valid = value.as_a.includes?(instance)
-              result(instance, instance_location, keyword_location, valid)
+              valid = if set = @enum_set
+                        set.includes?(instance)
+                      else
+                        @enum_values.includes?(instance)
+                      end
+              result(instance, instance_location, location, valid)
             end
           end
         end
@@ -94,120 +125,204 @@ module JsonSchemer
             "value at #{formatted_instance_location} is not: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            result(instance, instance_location, keyword_location, value == instance)
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            result(instance, instance_location, location, value == instance)
           end
         end
 
         # MultipleOf keyword
         class MultipleOf < Keyword
+          # Default value 0 is always valid against all numbers
+          # It will be overwritten by parse method via initialize method
+          @multiple_of_value : BigDecimal = BigDecimal.new(0)
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is not a multiple of: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            unless value.raw.is_a?(Number)
+              raise InvalidSchema.new("Value for keyword 'multipleOf' must be a number")
+            end
+            # Potential issue of losing precision when converting to BigDecimal
+            @multiple_of_value = BigDecimal.new(value.raw.as(Number).to_s)
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
             instance_bd = BigDecimal.new(instance.raw.as(Number).to_s)
-            value_bd = BigDecimal.new(value.raw.as(Number).to_s)
-            valid = (instance_bd % value_bd).zero?
-            result(instance, instance_location, keyword_location, valid)
+            valid = (instance_bd % @multiple_of_value).zero?
+            result(instance, instance_location, location, valid)
           end
         end
 
         # Maximum keyword
         class Maximum < Keyword
+          @max_value : Float64 = Float64::INFINITY
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is greater than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            unless value.raw.is_a?(Number)
+              raise InvalidSchema.new("Value for keyword 'maximum' must be a number")
             end
-            valid = compare_numbers(instance.raw.as(Number), value.raw.as(Number)) <= 0
-            result(instance, instance_location, keyword_location, valid)
+            @max_value = value.raw.as(Number).to_f64
+            value
           end
 
-          private def compare_numbers(a : Number, b : Number) : Int32
-            (a.to_f64 <=> b.to_f64) || 0
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Number)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.raw.as(Number).to_f64 <= @max_value
+            result(instance, instance_location, location, valid)
           end
         end
 
         # ExclusiveMaximum keyword
         class ExclusiveMaximum < Keyword
+          @ex_max_value : Float64 = Float64::INFINITY
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is greater than or equal to: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            unless value.raw.is_a?(Number)
+              raise InvalidSchema.new("Value for keyword 'exclusiveMaximum' must be a number")
             end
-            valid = instance.raw.as(Number).to_f64 < value.raw.as(Number).to_f64
-            result(instance, instance_location, keyword_location, valid)
+            @ex_max_value = value.raw.as(Number).to_f64
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Number)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.raw.as(Number).to_f64 < @ex_max_value
+            result(instance, instance_location, location, valid)
           end
         end
 
         # Minimum keyword
         class Minimum < Keyword
+          @min_value : Float64 = -Float64::INFINITY
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is less than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            unless value.raw.is_a?(Number)
+              raise InvalidSchema.new("Value for keyword 'minimum' must be a number")
             end
-            valid = instance.raw.as(Number).to_f64 >= value.raw.as(Number).to_f64
-            result(instance, instance_location, keyword_location, valid)
+            @min_value = value.raw.as(Number).to_f64
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Number)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.raw.as(Number).to_f64 >= @min_value
+            result(instance, instance_location, location, valid)
           end
         end
 
         # ExclusiveMinimum keyword
         class ExclusiveMinimum < Keyword
+          @ex_min_value : Float64 = -Float64::INFINITY
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is less than or equal to: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            unless value.raw.is_a?(Number)
+              raise InvalidSchema.new("Value for keyword 'exclusiveMinimum' must be a number")
             end
-            valid = instance.raw.as(Number).to_f64 > value.raw.as(Number).to_f64
-            result(instance, instance_location, keyword_location, valid)
+            @ex_min_value = value.raw.as(Number).to_f64
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Number)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.raw.as(Number).to_f64 > @ex_min_value
+            result(instance, instance_location, location, valid)
           end
         end
 
         # MaxLength keyword
         class MaxLength < Keyword
+          @max_length : Int64 = Int64::MAX
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "string length at #{formatted_instance_location} is greater than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @max_length = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @max_length = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'maxLength' must be an integer")
+              end
+            else
+              raise InvalidSchema.new("Value for keyword 'maxLength' must be a number")
             end
-            valid = instance.as_s.size <= (value.as_i? || value.as_f).to_i
-            result(instance, instance_location, keyword_location, valid)
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(String)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.as_s.size <= @max_length
+            result(instance, instance_location, location, valid)
           end
         end
 
         # MinLength keyword
         class MinLength < Keyword
+          @min_length : Int64 = 0
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "string length at #{formatted_instance_location} is less than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @min_length = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @min_length = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'minLength' must be an integer")
+              end
+            else
+              raise InvalidSchema.new("Value for keyword 'minLength' must be a number")
             end
-            valid = instance.as_s.size >= (value.as_i? || value.as_f).to_i
-            result(instance, instance_location, keyword_location, valid)
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(String)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.as_s.size >= @min_length
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -223,42 +338,80 @@ module JsonSchemer
             @regex = root.resolve_regexp(value.as_s)
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(String)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
-            valid = @regex.not_nil!.matches?(instance.as_s)
-            result(instance, instance_location, keyword_location, valid)
+            regex = @regex
+            return result(instance, instance_location, location, true) unless regex
+            valid = regex.matches?(instance.as_s)
+            result(instance, instance_location, location, valid)
           end
         end
 
         # MaxItems keyword
         class MaxItems < Keyword
+          @max_items : Int64 = Int64::MAX
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array size at #{formatted_instance_location} is greater than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @max_items = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @max_items = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'maxItems' must be an integer")
+              end
+            else
+              raise InvalidSchema.new("Value for keyword 'maxItems' must be a number")
             end
-            valid = instance.as_a.size <= (value.as_i? || value.as_f).to_i
-            result(instance, instance_location, keyword_location, valid)
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Array)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.as_a.size <= @max_items
+            result(instance, instance_location, location, valid)
           end
         end
 
         # MinItems keyword
         class MinItems < Keyword
+          @min_items : Int64 = 0
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array size at #{formatted_instance_location} is less than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @min_items = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @min_items = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'minItems' must be an integer")
+              end
+            else
+              raise InvalidSchema.new("Value for keyword 'minItems' must be a number")
             end
-            valid = instance.as_a.size >= (value.as_i? || value.as_f).to_i
-            result(instance, instance_location, keyword_location, valid)
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Array)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.as_a.size >= @min_items
+            result(instance, instance_location, location, valid)
           end
         end
 
@@ -268,166 +421,288 @@ module JsonSchemer
             "array items at #{formatted_instance_location} are not unique"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
             if value.as_bool == false
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
+
             arr = instance.as_a
-            valid = arr.size == arr.uniq.size
-            result(instance, instance_location, keyword_location, valid)
+            return result(instance, instance_location, location, true) if arr.size <= 1
+
+            # Optimization: Use Set iteration to short-circuit on first duplicate
+            seen = Set(JSON::Any).new(initial_capacity: arr.size)
+            valid = arr.all? { |item| seen.add?(item) }
+
+            result(instance, instance_location, location, valid)
           end
         end
 
         # MaxContains keyword
         class MaxContains < Keyword
+          @max_contains : Int64 = Int64::MAX
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number of array items at #{formatted_instance_location} matching `contains` schema is greater than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
-            end
-            contains_result = context.adjacent_results[Applicator::Contains]?
-            unless contains_result
-              return result(instance, instance_location, keyword_location, true)
-            end
-            anno = contains_result.get_annotation
-            if anno && anno.raw.is_a?(Array)
-              valid = anno.as_a.size <= (value.as_i? || value.as_f).to_i
-              result(instance, instance_location, keyword_location, valid)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @max_contains = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @max_contains = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'maxContains' must be an integer")
+              end
             else
-              result(instance, instance_location, keyword_location, true)
+              raise InvalidSchema.new("Value for keyword 'maxContains' must be a number")
+            end
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Array)
+              return result(instance, instance_location, location, true)
+            end
+            contains_result = context.adjacent_results.try(&.[Applicator::Contains]?)
+            unless contains_result
+              return result(instance, instance_location, location, true)
+            end
+            anno = contains_result.annotation
+            if anno && anno.raw.is_a?(Array)
+              valid = anno.as_a.size <= @max_contains
+              result(instance, instance_location, location, valid)
+            else
+              result(instance, instance_location, location, true)
             end
           end
         end
 
         # MinContains keyword
         class MinContains < Keyword
+          @min_contains : Int64 = 0
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number of array items at #{formatted_instance_location} matching `contains` schema is less than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Array)
-              return result(instance, instance_location, keyword_location, true)
-            end
-            contains_result = context.adjacent_results[Applicator::Contains]?
-            unless contains_result
-              return result(instance, instance_location, keyword_location, true)
-            end
-            anno = contains_result.get_annotation
-            if anno && anno.raw.is_a?(Array)
-              valid = anno.as_a.size >= (value.as_i? || value.as_f).to_i
-              result(instance, instance_location, keyword_location, valid)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @min_contains = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @min_contains = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'minContains' must be an integer")
+              end
             else
-              result(instance, instance_location, keyword_location, true)
+              raise InvalidSchema.new("Value for keyword 'minContains' must be a number")
+            end
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Array)
+              return result(instance, instance_location, location, true)
+            end
+            contains_result = context.adjacent_results.try(&.[Applicator::Contains]?)
+            unless contains_result
+              return result(instance, instance_location, location, true)
+            end
+            anno = contains_result.annotation
+            if anno && anno.raw.is_a?(Array)
+              valid = anno.as_a.size >= @min_contains
+              result(instance, instance_location, location, valid)
+            else
+              result(instance, instance_location, location, true)
             end
           end
         end
 
         # MaxProperties keyword
         class MaxProperties < Keyword
+          @max_properties : Int64 = Int64::MAX
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object size at #{formatted_instance_location} is greater than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @max_properties = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @max_properties = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'maxProperties' must be an integer")
+              end
+            else
+              raise InvalidSchema.new("Value for keyword 'maxProperties' must be a number")
             end
-            valid = instance.as_h.size <= (value.as_i? || value.as_f).to_i
-            result(instance, instance_location, keyword_location, valid)
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Hash)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.as_h.size <= @max_properties
+            result(instance, instance_location, location, valid)
           end
         end
 
         # MinProperties keyword
         class MinProperties < Keyword
+          @min_properties : Int64 = 0
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object size at #{formatted_instance_location} is less than: #{value}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            raw = value.raw
+            if raw.is_a?(Int64)
+              @min_properties = raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                @min_properties = raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword 'minProperties' must be an integer")
+              end
+            else
+              raise InvalidSchema.new("Value for keyword 'minProperties' must be a number")
             end
-            valid = instance.as_h.size >= (value.as_i? || value.as_f).to_i
-            result(instance, instance_location, keyword_location, valid)
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Hash)
+              return result(instance, instance_location, location, true)
+            end
+            valid = instance.as_h.size >= @min_properties
+            result(instance, instance_location, location, valid)
           end
         end
 
         # Required keyword
         class Required < Keyword
+          @required_keys : Array(String) = [] of String
+          @effective_keys_read : Array(String) = [] of String
+          @effective_keys_write : Array(String) = [] of String
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             missing = details.try(&.["missing_keys"]?.try(&.as_a.map(&.as_s).join(", "))) || ""
             "object at #{formatted_instance_location} is missing required properties: #{missing}"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            @required_keys = value.as_a.map(&.as_s)
+            @effective_keys_read = @required_keys
+            @effective_keys_write = @required_keys
+            @required_keys
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
-            required_keys = value.as_a.map(&.as_s)
-            instance_keys = instance.as_h.keys
+            effective_required_keys = case context.access_mode
+                                      when "read"
+                                        @effective_keys_read
+                                      when "write"
+                                        @effective_keys_write
+                                      else
+                                        @required_keys
+                                      end
 
-            # Handle access mode
-            if context.access_mode
-              properties_kw = schema.parsed["properties"]?
-              if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
-                inapplicable = [] of String
-                properties_kw.parsed.as(Hash(String, Schema)).each do |property, subschema|
-                  read_only = subschema.parsed["readOnly"]?
-                  write_only = subschema.parsed["writeOnly"]?
+            valid = effective_required_keys.all? { |k| instance.as_h.has_key?(k) }
+            if valid
+              result(instance, instance_location, location, true)
+            else
+              missing_keys = effective_required_keys.reject { |k| instance.as_h.has_key?(k) }
+              details_hash = {"missing_keys" => JSON::Any.new(missing_keys.map { |k| JSON::Any.new(k) })}
+              result(instance, instance_location, location, false, details: details_hash)
+            end
+          end
 
-                  if context.access_mode == "write" && read_only.try(&.value.as_bool?) == true
-                    inapplicable << property
-                  end
-                  if context.access_mode == "read" && write_only.try(&.value.as_bool?) == true
-                    inapplicable << property
-                  end
+          private def calculate_effective_keys(mode : String) : Array(String)
+            # Calculate
+            inapplicable = [] of String
+
+            # Note: We access the parent schema's raw properties to determine readOnly/writeOnly
+            properties_kw = schema.parsed["properties"]?
+            if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
+              properties_kw.parsed.as(Hash(String, Schema)).each do |property, subschema|
+                read_only = subschema.parsed["readOnly"]?
+                write_only = subschema.parsed["writeOnly"]?
+
+                if mode == "write" && read_only.try(&.value.as_bool?) == true
+                  inapplicable << property
                 end
-                required_keys = required_keys - inapplicable
+                if mode == "read" && write_only.try(&.value.as_bool?) == true
+                  inapplicable << property
+                end
               end
             end
 
-            missing_keys = required_keys - instance_keys
-            details_hash = {"missing_keys" => JSON::Any.new(missing_keys.map { |k| JSON::Any.new(k) })}
-            result(instance, instance_location, keyword_location, missing_keys.empty?, details: details_hash)
+            inapplicable.empty? ? @required_keys : @required_keys.reject { |k| inapplicable.includes?(k) }
+          end
+
+          def after_schema_initialize : Nil
+            @effective_keys_read = calculate_effective_keys("read")
+            @effective_keys_write = calculate_effective_keys("write")
           end
         end
 
         # DependentRequired keyword
         class DependentRequired < Keyword
+          @dependent_required : Hash(String, Array(String)) = {} of String => Array(String)
+
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object at #{formatted_instance_location} is missing required `dependentRequired` properties"
           end
 
-          def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            result = {} of String => Array(String)
+            value.as_h.each do |key, required_keys|
+              result[key] = required_keys.as_a.map(&.as_s)
+            end
+            @dependent_required = result
+            result
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
-              return result(instance, instance_location, keyword_location, true)
+              return result(instance, instance_location, location, true)
             end
 
-            existing_keys = instance.as_h.keys
+            existing_keys = instance.as_h
             nested = [] of Result
 
-            value.as_h.each do |key, required_keys|
-              next unless instance.as_h.has_key?(key)
+            @dependent_required.each do |key, required|
+              next unless existing_keys.has_key?(key)
 
-              required = required_keys.as_a.map(&.as_s)
-              missing = required - existing_keys
-              nested << result(
-                instance,
-                join_location(instance_location, key),
-                join_location(keyword_location, key),
-                missing.empty?
-              )
+              valid = required.all? { |k| existing_keys.has_key?(k) }
+              unless valid
+                missing = required.reject { |k| existing_keys.has_key?(k) }
+                nested << result(
+                  instance,
+                  join_location(instance_location, key),
+                  join_location(location, key),
+                  false,
+                  details: {"missing_keys" => JSON::Any.new(missing.map { |k| JSON::Any.new(k) })}
+                )
+              end
             end
 
-            result(instance, instance_location, keyword_location, nested.all?(&.valid), nested)
+            result(instance, instance_location, location, nested.empty?, nested)
           end
         end
       end

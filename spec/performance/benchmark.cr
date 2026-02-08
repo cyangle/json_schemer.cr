@@ -144,7 +144,7 @@ describe "Performance" do
 
     Benchmark.ips do |x|
       x.report("test suite validation") do
-        all_tests.each do |schema, data, expected|
+        all_tests.each do |schema, data, _|
           schema.valid?(data)
         end
       end

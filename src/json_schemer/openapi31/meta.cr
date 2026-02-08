@@ -17,7 +17,7 @@ module JsonSchemer
       "double" => ->(instance : JSON::Any, _format : String) {
         !instance.raw.is_a?(Number) || instance.raw.is_a?(Float64)
       },
-      "password" => ->(instance : JSON::Any, _format : String) {
+      "password" => ->(_instance : JSON::Any, _format : String) {
         true
       },
     } of String => Format::FormatValidator

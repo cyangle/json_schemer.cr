@@ -2,7 +2,7 @@
 
 A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_schemer) library for validating JSON documents against [JSON Schema](https://json-schema.org/).
 
-[![Crystal Version](https://img.shields.io/badge/crystal-%3E%3D1.18.2-blue.svg)](https://crystal-lang.org)
+[![Crystal Version](https://img.shields.io/badge/crystal-%3E%3D1.19-blue.svg)](https://crystal-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > [!CAUTION]
@@ -16,11 +16,12 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 - **OpenAPI 3.1** schema validation support
 - Multiple output formats: `flag`, `basic`, `classic`
 - Custom format validators
-- Custom keyword validators
+- Custom keyword validators or **Custom keyword classes**
 - Custom ref resolvers (file, HTTP, custom)
 - ECMA-262 compatible regex patterns
 - `$ref`, `$anchor`, `$dynamicRef` / `$dynamicAnchor` support
 - Complete vocabulary implementations
+- `contentSchema` support for validating content of string-encoded data
 - Custom error messages with `x-error`
 
 ## Installation
@@ -136,7 +137,7 @@ For example, to combine the built-in syntax validation with a custom internal do
 chained_validator = ->(value : JSON::Any, format : String) {
   # 1. First, call the built-in syntax validator
   return false unless JsonSchemer::Format::HOSTNAME.call(value, format)
-  
+
   # 2. Then, apply custom logic (e.g., must be a .com domain)
   if hostname = value.as_s?
     hostname.ends_with?(".com")
@@ -164,6 +165,32 @@ combined = ->(value : JSON::Any, format : String) {
 
 schema = JsonSchemer.schema(..., formats: {"hostname" => combined})
 ```
+
+### 4. Class-Based Custom Keywords
+
+For complex custom validation logic that requires parsing schema values (like checking bounds or configuration options), you can define a custom keyword class inheriting from `JsonSchemer::Keyword`.
+
+This is more powerful than the simple proc-based `keywords` option as it allows you to pre-process the schema value during initialization.
+
+```crystal
+class MoneyKeyword < JsonSchemer::Keyword
+  def validate(instance, instance_location, keyword_location, context)
+    return nil unless instance.raw.is_a?(String)
+
+    # Check if string is a valid money amount
+    if instance.as_s.matches?(/\A\d+\.\d{2}\z/)
+      nil
+    else
+      result(instance, instance_location, keyword_location, false)
+    end
+  end
+end
+
+# Register before creating schema
+JsonSchemer::VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/validation"]["money"] = MoneyKeyword
+```
+
+See [USAGE.md](USAGE.md#class-based-custom-keywords) for a complete example including parsing configuration options.
 
 ## Configuration Reference
 

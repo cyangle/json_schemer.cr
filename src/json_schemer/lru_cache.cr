@@ -3,7 +3,7 @@ module JsonSchemer
   # All operations are O(1).
   #
   # NOTE: This class is not thread-safe. Synchronization must be handled by the caller.
-  private class LRUCache(K, V)
+  class LRUCache(K, V)
     private class Node(K, V)
       property key : K
       property value : V
@@ -28,6 +28,32 @@ module JsonSchemer
       if node = @cache[key]?
         move_to_front(node)
         node.value
+      end
+    end
+
+    # Fetch a value from the cache, returning a tuple of (found, value).
+    # This handles nil values correctly - if found is true, value is the cached value (even if nil).
+    # This is O(1) and updates LRU order when the key exists.
+    def fetch(key : K) : Tuple(Bool, V?)
+      if node = @cache[key]?
+        move_to_front(node)
+        {true, node.value}
+      else
+        {false, nil}
+      end
+    end
+
+    # Fetch a value from the cache, computing and caching it if not present.
+    # The block is only called if the key is not in the cache.
+    # This is O(1) for cache hits and updates LRU order.
+    def fetch(key : K, & : -> V) : V
+      if node = @cache[key]?
+        move_to_front(node)
+        node.value
+      else
+        value = yield
+        set(key, value)
+        value
       end
     end
 

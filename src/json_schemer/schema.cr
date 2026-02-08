@@ -33,14 +33,14 @@ module JsonSchemer
     class Context
       property instance : JSON::Any
       property dynamic_scope : Array(Schema)
-      property adjacent_results : Hash(Keyword.class, Result)
+      property adjacent_results : Hash(Keyword.class, Result)?
       property short_circuit : Bool
       property access_mode : String?
 
       def initialize(
         @instance : JSON::Any,
         @dynamic_scope : Array(Schema) = [] of Schema,
-        @adjacent_results : Hash(Keyword.class, Result) = {} of Keyword.class => Result,
+        @adjacent_results : Hash(Keyword.class, Result)? = nil,
         @short_circuit : Bool = false,
         @access_mode : String? = nil,
       )
@@ -92,6 +92,7 @@ module JsonSchemer
     getter parent : Schema | Keyword | Nil
 
     @keyword : String = ""
+    getter location : Location::Node
 
     def keyword : String
       @keyword
@@ -103,7 +104,7 @@ module JsonSchemer
     @escaped_keyword : String?
     @ref_resolver : Proc(URI, JSONHash?)?
     @regexp_resolver : Proc(String, Regex?)?
-    @root_keyword_location : Location::Node?
+    @needs_adjacent_results : Bool = false
 
     # Initializes a new `Schema`.
     #
@@ -149,6 +150,17 @@ module JsonSchemer
       resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     )
+      @location = if parent
+                    kw = keyword || ""
+                    if !kw.empty?
+                      parent.location.join(kw)
+                    else
+                      parent.location
+                    end
+                  else
+                    Location.root
+                  end
+
       # Convert value to JSON::Any
       @value = case value
                when JSON::Any
@@ -203,11 +215,25 @@ module JsonSchemer
 
       @parsed = {} of String => Keyword
       parse
+      @needs_adjacent_results = parsed.keys.any? { |k| ADJACENT_CONSUMERS.includes?(k) }
     end
 
     def schema : Schema
       self
     end
+
+    ADJACENT_CONSUMERS = {
+      "additionalProperties",
+      "items",
+      "then",
+      "else",
+      "maxContains",
+      "minContains",
+      "unevaluatedProperties",
+      "unevaluatedItems",
+      "contentMediaType",
+      "contentSchema",
+    }
 
     # Validates an instance against the schema and returns true if valid.
     #
@@ -252,7 +278,8 @@ module JsonSchemer
       access_mode : String? = nil,
     ) : Hash(String, JSON::Any)
       resolved_output_format = output_format || configuration.output_format
-      resolved_resolve_enumerators = resolve_enumerators.nil? ? configuration.resolve_enumerators : resolve_enumerators
+      # Note: resolve_enumerators is available for future use but not currently implemented
+      _ = resolve_enumerators.nil? ? configuration.resolve_enumerators : resolve_enumerators
       resolved_access_mode = access_mode || configuration.access_mode
       # Convert instance to JSON::Any
       json_instance = case instance
@@ -268,50 +295,55 @@ module JsonSchemer
                         JSON.parse(instance.to_json)
                       end
 
-      instance_location = root_keyword_location
-      keyword_location = root_keyword_location
+      instance_location = Location.root
       context = Context.new(
         json_instance,
         [] of Schema,
-        {} of Keyword.class => Result,
+        nil,
         resolved_output_format == "flag",
         resolved_access_mode
       )
 
-      result = validate_instance(json_instance, instance_location, keyword_location, context)
+      result = validate_instance(json_instance, instance_location, context)
       result.output(resolved_output_format)
     end
 
     # Validate instance (internal)
-    def validate_instance(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Context) : Result
+    def validate_instance(instance : JSON::Any, instance_location : Location::Node, context : Context) : Result
       context.dynamic_scope.push(self)
       original_adjacent_results = context.adjacent_results
-      adjacent_results = context.adjacent_results = {} of Keyword.class => Result
+
+      adjacent_results = if @needs_adjacent_results
+                           context.adjacent_results = {} of Keyword.class => Result
+                         else
+                           context.adjacent_results = nil
+                         end
+
       short_circuit = context.short_circuit
 
       begin
         # Handle boolean schemas
         if value.raw == false
-          return result(instance, instance_location, keyword_location, false)
+          return result(instance, instance_location, location, false)
         end
         if value.raw == true || (value.raw.is_a?(Hash) && value.as_h.empty?)
-          return result(instance, instance_location, keyword_location, true)
+          return result(instance, instance_location, location, true)
         end
 
         valid = true
         nested = [] of Result
 
-        parsed.each do |kw, keyword_instance|
-          keyword_result = keyword_instance.validate(instance, instance_location, join_location(keyword_location, kw), context)
+        parsed.each_value do |keyword_instance|
+          keyword_result = keyword_instance.validate(instance, instance_location, context)
           next unless keyword_result
 
           valid = valid && keyword_result.valid
-          return result(instance, instance_location, keyword_location, false) if short_circuit && !valid
+          return result(instance, instance_location, location, false) if short_circuit && !valid
           nested << keyword_result
-          adjacent_results[keyword_instance.class] = keyword_result
+          adjacent_results[keyword_instance.class] = keyword_result if adjacent_results
         end
 
-        result(instance, instance_location, keyword_location, valid, nested)
+        result(instance, instance_location, location, valid, nested)
       ensure
         context.dynamic_scope.pop
         context.adjacent_results = original_adjacent_results
@@ -335,14 +367,23 @@ module JsonSchemer
     def absolute_keyword_location : String
       @absolute_keyword_location ||= begin
         buri = base_uri
-        if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (buri.fragment.nil? || buri.fragment.not_nil!.empty?)
+        frag = buri.fragment
+        if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
           uri = buri.dup
           uri.fragment = ""
           uri.to_s
         elsif kw = @keyword
-          "#{@parent.not_nil!.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+          if p = @parent
+            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+          else
+            ""
+          end
         else
-          @parent.not_nil!.absolute_keyword_location
+          if p = @parent
+            p.absolute_keyword_location
+          else
+            ""
+          end
         end
       end
     end
@@ -363,9 +404,9 @@ module JsonSchemer
 
     # x-error support
     def x_error : String?
-      parsed["x-error"]?.try do |xe|
-        if xe.is_a?(Keyword)
-          xe.as(Draft202012::Vocab::Core::XError).message(error_key)
+      parsed["x-error"]?.try do |xerr|
+        if xerr.is_a?(Keyword)
+          xerr.as(Draft202012::Vocab::Core::XError).message(error_key)
         end
       end
     end
@@ -391,8 +432,9 @@ module JsonSchemer
     # Resolve a reference URI
     def resolve_ref(uri : URI) : Schema
       pointer = ""
-      if uri.fragment && Format.valid_json_pointer?(uri.fragment.not_nil!)
-        pointer = URI.decode(uri.fragment.not_nil!)
+      frag = uri.fragment
+      if frag && Format.valid_json_pointer?(frag)
+        pointer = URI.decode(frag)
         uri = uri.dup
         uri.fragment = nil
       end
@@ -512,7 +554,10 @@ module JsonSchemer
                  else
                    [] of JSON::Any
                  end
-        all_of << JSON::Any.new({"$ref" => compound_document.delete("$ref").not_nil!})
+        ref_val = compound_document.delete("$ref")
+        if ref_val
+          all_of << JSON::Any.new({"$ref" => ref_val})
+        end
         compound_document["allOf"] = JSON::Any.new(all_of)
       end
 
@@ -559,9 +604,9 @@ module JsonSchemer
             when Schema
               queue << p
             when Array(Schema)
-              p.each { |s| queue << s }
+              p.each { |subschema| queue << subschema }
             when Hash(String, Schema)
-              p.each_value { |s| queue << s }
+              p.each_value { |subschema| queue << subschema }
             end
           end
         when Hash(String, Keyword)
@@ -725,8 +770,9 @@ module JsonSchemer
             # For now, let's use Draft 2020-12 default if absolutely nothing else
             # But this might be wrong if it's a completely different schema.
             # Ideally this path is not taken for valid scenarios.
-            @keywords = Draft202012::Vocab::ALL.dup
-            @keyword_order = @keywords.not_nil!.keys.each_with_index.to_h { |k, i| {k, i} }
+            kw_hash = Draft202012::Vocab::ALL.dup
+            @keywords = kw_hash
+            @keyword_order = kw_hash.keys.each_with_index.to_h { |k, i| {k, i} }
           end
         end
       end
@@ -734,19 +780,18 @@ module JsonSchemer
       # Parse remaining keywords
       if val.raw.is_a?(Hash)
         # Sort by keyword order
-        sorted_keys = val.as_h.keys.sort_by { |k| keyword_order[k]? || Int32::MAX }
+        sorted_keys = val.as_h.keys.sort_by! { |k| keyword_order[k]? || Int32::MAX }
 
-        sorted_keys.each do |kw|
-          next if parsed.has_key?(kw)
-          kval = val.as_h[kw]
-          klass = keywords[kw]? || UNKNOWN_KEYWORD_CLASS
-          parsed[kw] = klass.new(kval, self, kw)
+        sorted_keys.each do |key|
+          next if parsed.has_key?(key)
+          kval = val.as_h[key]
+          klass = keywords[key]? || UNKNOWN_KEYWORD_CLASS
+          parsed[key] = klass.new(kval, self, key)
         end
       end
-    end
 
-    private def root_keyword_location : Location::Node
-      @root_keyword_location ||= Location.root
+      # Warmup caches
+      parsed.each_value(&.after_schema_initialize)
     end
   end
 end
