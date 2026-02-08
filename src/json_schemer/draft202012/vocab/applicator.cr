@@ -16,27 +16,7 @@ module JsonSchemer
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
             if context.short_circuit
-              valid = @schemas.all? do |subschema|
-                # Short-circuiting mode: stop as soon as we find an invalid one
-                # Note: We rely on the subschema's `validate_instance` returning a Result object.
-                # In short-circuit mode, we don't care about the nested results if we fail.
-                # But we can't easily get the index here without index.
-                # So we iterate.
-                # Actually, `all?` is cleaner.
-                # But wait, we need to pass locations.
-
-                # To do this correctly with indices, we can't use standard `all?` without index tracking.
-                # And `map_with_index` is eager.
-
-                # Manual iteration for short-circuiting:
-                true
-              end
-              # Refactored below
-            end
-
-            nested = [] of Result
-
-            if context.short_circuit
+              nested = [] of Result
               valid = true
               @schemas.each_with_index do |subschema, index|
                 res = subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)

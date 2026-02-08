@@ -221,6 +221,7 @@ module JsonSchemer
       "unevaluatedProperties",
       "unevaluatedItems",
       "contentMediaType",
+      "contentSchema",
     }
 
     # Validates an instance against the schema and returns true if valid.
