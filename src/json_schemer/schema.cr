@@ -103,7 +103,7 @@ module JsonSchemer
     @escaped_keyword : String?
     @ref_resolver : Proc(URI, JSONHash?)?
     @regexp_resolver : Proc(String, Regex?)?
-    @needs_adjacent_results : Bool?
+    @needs_adjacent_results : Bool = false
 
     # Initializes a new `Schema`.
     #
