@@ -266,7 +266,8 @@ module JsonSchemer
       access_mode : String? = nil,
     ) : Hash(String, JSON::Any)
       resolved_output_format = output_format || configuration.output_format
-      resolved_resolve_enumerators = resolve_enumerators.nil? ? configuration.resolve_enumerators : resolve_enumerators
+      # Note: resolve_enumerators is available for future use but not currently implemented
+      _ = resolve_enumerators.nil? ? configuration.resolve_enumerators : resolve_enumerators
       resolved_access_mode = access_mode || configuration.access_mode
       # Convert instance to JSON::Any
       json_instance = case instance
@@ -357,14 +358,23 @@ module JsonSchemer
     def absolute_keyword_location : String
       @absolute_keyword_location ||= begin
         buri = base_uri
-        if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (buri.fragment.nil? || buri.fragment.not_nil!.empty?)
+        frag = buri.fragment
+        if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
           uri = buri.dup
           uri.fragment = ""
           uri.to_s
         elsif kw = @keyword
-          "#{@parent.not_nil!.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+          if p = @parent
+            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+          else
+            ""
+          end
         else
-          @parent.not_nil!.absolute_keyword_location
+          if p = @parent
+            p.absolute_keyword_location
+          else
+            ""
+          end
         end
       end
     end
@@ -385,9 +395,9 @@ module JsonSchemer
 
     # x-error support
     def x_error : String?
-      parsed["x-error"]?.try do |xe|
-        if xe.is_a?(Keyword)
-          xe.as(Draft202012::Vocab::Core::XError).message(error_key)
+      parsed["x-error"]?.try do |xerr|
+        if xerr.is_a?(Keyword)
+          xerr.as(Draft202012::Vocab::Core::XError).message(error_key)
         end
       end
     end
@@ -413,8 +423,9 @@ module JsonSchemer
     # Resolve a reference URI
     def resolve_ref(uri : URI) : Schema
       pointer = ""
-      if uri.fragment && Format.valid_json_pointer?(uri.fragment.not_nil!)
-        pointer = URI.decode(uri.fragment.not_nil!)
+      frag = uri.fragment
+      if frag && Format.valid_json_pointer?(frag)
+        pointer = URI.decode(frag)
         uri = uri.dup
         uri.fragment = nil
       end
@@ -534,7 +545,10 @@ module JsonSchemer
                  else
                    [] of JSON::Any
                  end
-        all_of << JSON::Any.new({"$ref" => compound_document.delete("$ref").not_nil!})
+        ref_val = compound_document.delete("$ref")
+        if ref_val
+          all_of << JSON::Any.new({"$ref" => ref_val})
+        end
         compound_document["allOf"] = JSON::Any.new(all_of)
       end
 
@@ -581,9 +595,9 @@ module JsonSchemer
             when Schema
               queue << p
             when Array(Schema)
-              p.each { |s| queue << s }
+              p.each { |subschema| queue << subschema }
             when Hash(String, Schema)
-              p.each_value { |s| queue << s }
+              p.each_value { |subschema| queue << subschema }
             end
           end
         when Hash(String, Keyword)
@@ -747,8 +761,9 @@ module JsonSchemer
             # For now, let's use Draft 2020-12 default if absolutely nothing else
             # But this might be wrong if it's a completely different schema.
             # Ideally this path is not taken for valid scenarios.
-            @keywords = Draft202012::Vocab::ALL.dup
-            @keyword_order = @keywords.not_nil!.keys.each_with_index.to_h { |k, i| {k, i} }
+            kw_hash = Draft202012::Vocab::ALL.dup
+            @keywords = kw_hash
+            @keyword_order = kw_hash.keys.each_with_index.to_h { |k, i| {k, i} }
           end
         end
       end
@@ -758,11 +773,11 @@ module JsonSchemer
         # Sort by keyword order
         sorted_keys = val.as_h.keys.sort_by! { |k| keyword_order[k]? || Int32::MAX }
 
-        sorted_keys.each do |kw|
-          next if parsed.has_key?(kw)
-          kval = val.as_h[kw]
-          klass = keywords[kw]? || UNKNOWN_KEYWORD_CLASS
-          parsed[kw] = klass.new(kval, self, kw)
+        sorted_keys.each do |key|
+          next if parsed.has_key?(key)
+          kval = val.as_h[key]
+          klass = keywords[key]? || UNKNOWN_KEYWORD_CLASS
+          parsed[key] = klass.new(kval, self, key)
         end
       end
 

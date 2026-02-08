@@ -109,7 +109,9 @@ module JsonSchemer
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
+            subschema_obj = @subschema
+            return nil unless subschema_obj
+            subschema_result = subschema_obj.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, !subschema_result.valid, subschema_result.nested)
           end
         end
@@ -123,7 +125,9 @@ module JsonSchemer
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
-            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
+            subschema_obj = @subschema
+            return nil unless subschema_obj
+            subschema_result = subschema_obj.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, true, subschema_result.nested, result_annotation: JSON::Any.new(subschema_result.valid))
           end
         end
@@ -143,9 +147,11 @@ module JsonSchemer
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
             if_result = context.adjacent_results.try(&.[If]?)
             return nil unless if_result
-            return nil unless if_result.get_annotation.try(&.as_bool?)
+            return nil unless if_result.annotation.try(&.as_bool?)
 
-            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
+            subschema_obj = @subschema
+            return nil unless subschema_obj
+            subschema_result = subschema_obj.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, subschema_result.valid, subschema_result.nested)
           end
         end
@@ -165,9 +171,11 @@ module JsonSchemer
           def validate(instance : JSON::Any, instance_location : Location::Node, keyword_location : Location::Node, context : Schema::Context) : Result?
             if_result = context.adjacent_results.try(&.[If]?)
             return nil unless if_result
-            return nil if if_result.get_annotation.try(&.as_bool?)
+            return nil if if_result.annotation.try(&.as_bool?)
 
-            subschema_result = @subschema.not_nil!.validate_instance(instance, instance_location, keyword_location, context)
+            subschema_obj = @subschema
+            return nil unless subschema_obj
+            subschema_result = subschema_obj.validate_instance(instance, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, subschema_result.valid, subschema_result.nested)
           end
         end
@@ -245,10 +253,11 @@ module JsonSchemer
             end
 
             prefix_items_result = context.adjacent_results.try(&.[PrefixItems]?)
-            evaluated_index = prefix_items_result.try(&.get_annotation.try(&.as_i?)) || -1
+            evaluated_index = prefix_items_result.try(&.annotation.try(&.as_i?)) || -1
             offset = evaluated_index + 1
 
-            items_schema = @subschema.not_nil!
+            items_schema = @subschema
+            return result(instance, instance_location, keyword_location, true) unless items_schema
             arr = instance.as_a
             nested = arr[offset..].map_with_index do |item, index|
               items_schema.validate_instance(item, join_location(instance_location, (offset + index).to_s), keyword_location, context)
@@ -276,17 +285,18 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            contains_schema = @subschema.not_nil!
+            contains_schema = @subschema
+            return result(instance, instance_location, keyword_location, true) unless contains_schema
             arr = instance.as_a
             nested = arr.map_with_index do |item, index|
               contains_schema.validate_instance(item, join_location(instance_location, index.to_s), keyword_location, context)
             end
 
-            anno = nested.each_with_index.compact_map { |r, i| i.to_i64 if r.valid }.to_a
+            anno = nested.each_with_index.compact_map { |result, idx| idx.to_i64 if result.valid }.to_a
 
-            min_contains = schema.parsed["minContains"]?.try do |mc|
-              if mc.is_a?(Keyword)
-                (mc.value.as_i? || mc.value.as_f).to_i
+            min_contains = schema.parsed["minContains"]?.try do |min_kw|
+              if min_kw.is_a?(Keyword)
+                (min_kw.value.as_i? || min_kw.value.as_f).to_i
               else
                 1
               end
@@ -394,16 +404,21 @@ module JsonSchemer
             evaluated_keys = Set(String).new
 
             properties_result = context.adjacent_results.try(&.[Properties]?)
-            if properties_result && properties_result.get_annotation
-              evaluated_keys.concat(properties_result.get_annotation.not_nil!.as_a.map(&.as_s))
+            if properties_result
+              if ann = properties_result.annotation
+                evaluated_keys.concat(ann.as_a.map(&.as_s))
+              end
             end
 
             pattern_properties_result = context.adjacent_results.try(&.[PatternProperties]?)
-            if pattern_properties_result && pattern_properties_result.get_annotation
-              evaluated_keys.concat(pattern_properties_result.get_annotation.not_nil!.as_a.map(&.as_s))
+            if pattern_properties_result
+              if ann = pattern_properties_result.annotation
+                evaluated_keys.concat(ann.as_a.map(&.as_s))
+              end
             end
 
-            additional_schema = @subschema.not_nil!
+            additional_schema = @subschema
+            return result(instance, instance_location, keyword_location, true) unless additional_schema
             evaluated = {} of String => JSON::Any
             nested = [] of Result
 
@@ -436,7 +451,8 @@ module JsonSchemer
               return result(instance, instance_location, keyword_location, true)
             end
 
-            names_schema = @subschema.not_nil!
+            names_schema = @subschema
+            return result(instance, instance_location, keyword_location, true) unless names_schema
             nested = instance.as_h.keys.map do |key|
               names_schema.validate_instance(JSON::Any.new(key), instance_location, keyword_location, context)
             end

@@ -44,9 +44,9 @@ module JsonSchemer
 
             index = 0
             sorted_vocabs.each do |_vocab, vocab_keywords|
-              vocab_keywords.each do |kw, klass|
-                keywords[kw] = klass
-                keyword_order[kw] = index
+              vocab_keywords.each do |keyword, klass|
+                keywords[keyword] = klass
+                keyword_order[keyword] = index
                 index += 1
               end
             end

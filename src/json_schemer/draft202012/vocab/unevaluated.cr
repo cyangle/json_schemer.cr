@@ -30,7 +30,8 @@ module JsonSchemer
               collect_unevaluated_items(adjacent_result, unevaluated_items)
             end)
 
-            items_schema = @subschema.not_nil!
+            items_schema = @subschema
+            return result(instance, instance_location, keyword_location, true) unless items_schema
             nested = unevaluated_items.map do |index|
               items_schema.validate_instance(
                 instance.as_a[index],
@@ -47,17 +48,17 @@ module JsonSchemer
           private def collect_unevaluated_items(res : Result, unevaluated_items : Set(Int32))
             case res.source
             when Applicator::PrefixItems
-              if ann = res.get_annotation
+              if ann = res.annotation
                 if ann.as_i?
                   (0..ann.as_i).each { |i| unevaluated_items.delete(i) }
                 end
               end
             when Applicator::Items, UnevaluatedItems
-              if res.get_annotation.try(&.as_bool?)
+              if res.annotation.try(&.as_bool?)
                 unevaluated_items.clear
               end
             when Applicator::Contains
-              if ann = res.get_annotation
+              if ann = res.annotation
                 if ann.raw.is_a?(Array)
                   ann.as_a.each { |i| unevaluated_items.delete(i.as_i) }
                 end
@@ -99,7 +100,8 @@ module JsonSchemer
               collect_evaluated_keys(adjacent_result, evaluated_keys)
             end)
 
-            props_schema = @subschema.not_nil!
+            props_schema = @subschema
+            return result(instance, instance_location, keyword_location, true) unless props_schema
             evaluated = {} of String => JSON::Any
             nested = [] of Result
 
@@ -117,7 +119,7 @@ module JsonSchemer
           private def collect_evaluated_keys(res : Result, evaluated_keys : Set(String))
             case res.source
             when Applicator::Properties, Applicator::PatternProperties, Applicator::AdditionalProperties, UnevaluatedProperties
-              if ann = res.get_annotation
+              if ann = res.annotation
                 if ann.raw.is_a?(Array)
                   ann.as_a.each { |k| evaluated_keys << k.as_s }
                 end

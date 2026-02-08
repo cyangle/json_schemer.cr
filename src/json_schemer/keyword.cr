@@ -81,9 +81,9 @@ module JsonSchemer
 
     # x-error support
     def x_error : String?
-      schema.parsed["x-error"]?.try do |xe|
-        if xe.is_a?(Keyword)
-          xe.as(Draft202012::Vocab::Core::XError).message(error_key)
+      schema.parsed["x-error"]?.try do |xerr|
+        if xerr.is_a?(Keyword)
+          xerr.as(Draft202012::Vocab::Core::XError).message(error_key)
         end
       end
     end

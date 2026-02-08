@@ -56,7 +56,7 @@ module JsonSchemer
               result(instance, instance_location, keyword_location, valid, type: single)
             else
               # Use types array (even if empty, though empty type array is probably invalid schema or matches nothing)
-              valid = @types.any? { |t| valid_type(t, instance) }
+              valid = @types.any? { |type_str| valid_type(type_str, instance) }
               result(instance, instance_location, keyword_location, valid)
             end
           end
@@ -342,7 +342,9 @@ module JsonSchemer
             unless instance.raw.is_a?(String)
               return result(instance, instance_location, keyword_location, true)
             end
-            valid = @regex.not_nil!.matches?(instance.as_s)
+            regex = @regex
+            return result(instance, instance_location, keyword_location, true) unless regex
+            valid = regex.matches?(instance.as_s)
             result(instance, instance_location, keyword_location, valid)
           end
         end
@@ -470,7 +472,7 @@ module JsonSchemer
             unless contains_result
               return result(instance, instance_location, keyword_location, true)
             end
-            anno = contains_result.get_annotation
+            anno = contains_result.annotation
             if anno && anno.raw.is_a?(Array)
               valid = anno.as_a.size <= @max_contains
               result(instance, instance_location, keyword_location, valid)
@@ -512,7 +514,7 @@ module JsonSchemer
             unless contains_result
               return result(instance, instance_location, keyword_location, true)
             end
-            anno = contains_result.get_annotation
+            anno = contains_result.annotation
             if anno && anno.raw.is_a?(Array)
               valid = anno.as_a.size >= @min_contains
               result(instance, instance_location, keyword_location, valid)

@@ -36,8 +36,8 @@ module JsonSchemer
             # Get decoded content from contentEncoding if present
             content = instance.as_s
             encoding_result = context.adjacent_results.try(&.[ContentEncoding]?)
-            if encoding_result && encoding_result.get_annotation
-              ann = encoding_result.get_annotation
+            if encoding_result && encoding_result.annotation
+              ann = encoding_result.annotation
               if ann && ann.as_s?
                 content = ann.as_s
               end
@@ -72,10 +72,11 @@ module JsonSchemer
             media_type_result = context.adjacent_results.try(&.[ContentMediaType]?)
             return result(instance, instance_location, keyword_location, true) unless media_type_result
 
-            anno = media_type_result.get_annotation
+            anno = media_type_result.annotation
             return result(instance, instance_location, keyword_location, true) unless anno
 
-            content_schema = @subschema.not_nil!
+            content_schema = @subschema
+            return result(instance, instance_location, keyword_location, true) unless content_schema
             subschema_result = content_schema.validate_instance(anno, instance_location, keyword_location, context)
             result(instance, instance_location, keyword_location, true, subschema_result.nested, result_annotation: JSON::Any.new(subschema_result.valid))
           end

@@ -10,8 +10,8 @@ module JsonSchemer
             schemas = parsed.as(Array(Schema))
             nested = [] of Result
 
-            schemas.each_with_index do |s, index|
-              ref_kw = s.parsed["$ref"]?
+            schemas.each_with_index do |subschema, index|
+              ref_kw = subschema.parsed["$ref"]?
               if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
                 ref_schema = ref_kw.ref_schema
                 next if skip_ref_once == ref_schema.absolute_keyword_location
@@ -22,7 +22,7 @@ module JsonSchemer
                 end
               end
 
-              nested << s.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
+              nested << subschema.validate_instance(instance, instance_location, join_location(keyword_location, index.to_s), context)
             end
 
             @skip_ref_once = nil
@@ -107,16 +107,16 @@ module JsonSchemer
               by_ref = {} of String => Schema
               by_name = {} of String => Schema
 
-              subschemas.each do |s|
-                ref_kw = s.parsed["$ref"]?
+              subschemas.each do |subschema|
+                ref_kw = subschema.parsed["$ref"]?
                 if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
                   ref_str = ref_kw.value.as_s
-                  by_ref[ref_str] = s
+                  by_ref[ref_str] = subschema
 
                   if ref_str.starts_with?("#/components/schemas/")
                     schema_name = ref_str.sub("#/components/schemas/", "")
                     if FIXED_FIELD_REGEX.matches?(schema_name)
-                      by_name[schema_name] = s
+                      by_name[schema_name] = subschema
                     end
                   end
                 end
