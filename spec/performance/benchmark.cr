@@ -95,6 +95,10 @@ describe "Performance" do
       x.report("initialized, valid, flag") do
         schema.valid?(valid_data)
       end
+
+      x.report("initialized, invalid, flag") do
+        schema.valid?(invalid_data)
+      end
     end
   end
 
