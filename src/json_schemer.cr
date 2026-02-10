@@ -35,12 +35,10 @@ require "./json_schemer/draft202012/vocab/meta_data"
 require "./json_schemer/draft202012/vocab"
 require "./json_schemer/draft202012/meta"
 require "./json_schemer/openapi32/vocab/base"
-
 require "./json_schemer/openapi32/vocab"
 require "./json_schemer/openapi32/meta"
 require "./json_schemer/openapi32/document"
 require "./json_schemer/schema"
-
 require "./json_schemer/openapi"
 
 module JsonSchemer
