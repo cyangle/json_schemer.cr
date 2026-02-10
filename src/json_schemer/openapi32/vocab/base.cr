@@ -1,5 +1,5 @@
 module JsonSchemer
-  module OpenAPI31
+  module OpenAPI32
     module Vocab
       module Base
         # AllOf with discriminator support
@@ -131,68 +131,6 @@ module JsonSchemer
 
               # Check implicit mapping
               return by_name[property_value]? if by_name.has_key?(property_value)
-              # Also check if case-insensitive match exists (optional improvement, but fixes tests if they mismatch case)
-              # The spec doesn't mandate case insensitivity but implies the value is the schema name.
-              # If schema names are capitalized but value is not, we might need to handle it.
-              # However, Ruby implementation handles this by `delete_prefix` which returns the exact suffix.
-              # The issue in test was likely that instance value was "circle" and schema name "Circle".
-              # Wait, Ruby test uses `type: 'circle'` and `Circle` schema has `type: {const: 'circle'}`.
-              # But `Circle` schema definition key IS `Circle`.
-              # `by_name` stores `Circle`.
-              # `property_value` is `circle`.
-              # `by_name["circle"]` is nil.
-
-              # Is there a special rule about case?
-              # Or does `resolve_subschema` in Ruby handle it?
-              # I checked Ruby code: it doesn't seem to do case conversion.
-
-              # Wait, `test_one_of_discriminator` (lines 305-338):
-              # 'Circle': { ..., 'properties': { 'type': {'const': 'circle'} } }
-              # Instance: `{"type": "circle", ...}`.
-              # Discriminator `propertyName: type`.
-              # No mapping.
-              # Implicit mapping: `type` value is `circle`.
-              # Schema key is `Circle`.
-              # `circle` != `Circle`.
-              # So how does Ruby pass?
-
-              # Maybe Ruby test uses `schema('MyResponseType')`.
-              # `MyResponseType` has `oneOf` with `Circle`.
-
-              # In Ruby, `resolve_subschema` uses `by_name`.
-              # `by_name` uses `delete_prefix`.
-              # Maybe `Circle` schema has a different name in the test?
-              # No, it's key `Circle`.
-
-              # Ah, maybe I should check if `resolve_subschema` tries to use `property_value` as a ref directly?
-              # If `by_name` fails, it falls back to `ref`.
-              # `schema.ref("circle")`.
-              # `circle` is not a valid ref relative to... wait.
-              # If root is `.../components/schemas/MyResponseType`? No.
-              # Root is document.
-
-              # Maybe the test relies on `property_value` being case-insensitive?
-              # Or maybe I misread the test data?
-              # In `test_one_of_discriminator`:
-              # `circle = JSON.parse(%q({"type": "circle", "radius": 5}))` in my spec.
-              # Ruby: `CAT = { ..., 'petType' => 'Cat' }`.
-              # Wait, I am looking at `test_one_of_discriminator` in Ruby (lines 305+).
-              # It uses `CAT`, `DOG`.
-              # `CAT` is defined at top: `'petType' => 'Cat'`.
-              # `Cat` schema name is `Cat`.
-              # So `Cat` matches `Cat`.
-              # Case matches!
-
-              # In my ported test `spec/openapi_spec.cr`, I used:
-              # `Circle`: `const: circle`.
-              # Instance `type: circle`.
-              # Schema name `Circle`.
-              # Mismatch!
-
-              # So I introduced the bug in my test data by lowercasing the instance type but keeping schema name capitalized.
-              # I should fix the test case to match case.
-
-              return by_name[property_value]?
             end
 
             # Fallback to ref resolution

@@ -34,11 +34,13 @@ require "./json_schemer/draft202012/vocab/content"
 require "./json_schemer/draft202012/vocab/meta_data"
 require "./json_schemer/draft202012/vocab"
 require "./json_schemer/draft202012/meta"
-require "./json_schemer/openapi31/vocab/base"
-require "./json_schemer/openapi31/vocab"
-require "./json_schemer/openapi31/meta"
-require "./json_schemer/openapi31/document"
+require "./json_schemer/openapi32/vocab/base"
+
+require "./json_schemer/openapi32/vocab"
+require "./json_schemer/openapi32/meta"
+require "./json_schemer/openapi32/document"
 require "./json_schemer/schema"
+
 require "./json_schemer/openapi"
 
 module JsonSchemer
@@ -232,10 +234,10 @@ module JsonSchemer
   # Get OpenAPI 3.1 schema
   def self.openapi31 : Schema
     @@openapi31 ||= Schema.new(
-      OpenAPI31::SCHEMA,
-      base_uri: OpenAPI31::BASE_URI,
-      formats: OpenAPI31::FORMATS,
-      ref_resolver: OpenAPI31::Meta::SCHEMAS_RESOLVER,
+      OpenAPI32::SCHEMA_3_1,
+      base_uri: URI.parse(OPENAPI31_DIALECT_ID),
+      formats: OpenAPI32::FORMATS,
+      ref_resolver: OpenAPI32::Meta::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
   end
@@ -243,8 +245,28 @@ module JsonSchemer
   # Get OpenAPI 3.1 document schema
   def self.openapi31_document : Schema
     @@openapi31_document ||= Schema.new(
-      OpenAPI31::Document::SCHEMA_BASE,
-      ref_resolver: OpenAPI31::Document::SCHEMAS_RESOLVER,
+      OpenAPI32::Document::SCHEMA_BASE,
+      ref_resolver: OpenAPI32::Document::SCHEMAS_RESOLVER,
+      regexp_resolver: "ecma"
+    )
+  end
+
+  # Get OpenAPI 3.2 schema
+  def self.openapi32 : Schema
+    @@openapi32 ||= Schema.new(
+      OpenAPI32::SCHEMA,
+      base_uri: OpenAPI32::BASE_URI,
+      formats: OpenAPI32::FORMATS,
+      ref_resolver: OpenAPI32::Meta::SCHEMAS_RESOLVER,
+      regexp_resolver: "ecma"
+    )
+  end
+
+  # Get OpenAPI 3.2 document schema
+  def self.openapi32_document : Schema
+    @@openapi32_document ||= Schema.new(
+      OpenAPI32::Document::SCHEMA_BASE,
+      ref_resolver: OpenAPI32::Document::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
   end
@@ -350,7 +372,8 @@ module JsonSchemer
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/format-assertion"] = Draft202012::Vocab::FORMAT_ASSERTION
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/content"] = Draft202012::Vocab::CONTENT
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/meta-data"] = Draft202012::Vocab::META_DATA
-    VOCABULARIES["https://spec.openapis.org/oas/3.1/vocab/base"] = OpenAPI31::Vocab::BASE
+    VOCABULARIES["https://spec.openapis.org/oas/3.1/vocab/base"] = OpenAPI32::Vocab::BASE
+    VOCABULARIES["https://spec.openapis.org/oas/3.2/vocab/base"] = OpenAPI32::Vocab::BASE
 
     VOCABULARIES.each_with_index do |(vocab, _keywords), index|
       VOCABULARY_ORDER[vocab] = index
@@ -359,6 +382,7 @@ module JsonSchemer
     # Register meta schemas for quick lookup
     META_SCHEMA_CALLABLES_BY_BASE_URI_STR[DRAFT202012_ID] = -> { draft202012 }
     META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OPENAPI31_DIALECT_ID] = -> { openapi31 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OPENAPI32_DIALECT_ID] = -> { openapi32 }
   end
 
   # Meta schema lookup

@@ -29,9 +29,16 @@ module JsonSchemer
 
       version = document["openapi"]?.try(&.as_s)
       case version
-      when /\A3\.1\.\d+\z/
-        @document_schema = JsonSchemer.openapi31_document
-        resolved_meta_schema = document["jsonSchemaDialect"]?.try(&.as_s) || OpenAPI31::BASE_URI.to_s
+      when /\A3\.[12]\.\d+\z/
+        @document_schema = JsonSchemer.openapi32_document
+        resolved_meta_schema = document["jsonSchemaDialect"]?.try(&.as_s)
+        unless resolved_meta_schema
+          if version && version.starts_with?("3.1")
+            resolved_meta_schema = OPENAPI31_DIALECT_ID
+          else
+            resolved_meta_schema = OpenAPI32::BASE_URI.to_s
+          end
+        end
       else
         raise UnsupportedOpenAPIVersion.new(version.to_s)
       end

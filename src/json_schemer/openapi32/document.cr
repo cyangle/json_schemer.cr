@@ -1,12 +1,10 @@
 module JsonSchemer
-  module OpenAPI31
+  module OpenAPI32
     module Document
       DIALECTS = [
-        OpenAPI31::BASE_URI.to_s,
+        OpenAPI32::BASE_URI.to_s,
+        JsonSchemer::OPENAPI31_DIALECT_ID,
         Draft202012::BASE_URI.to_s,
-        # Unsupported drafts omitted from logic but kept in list if needed for enum validation?
-        # If I remove them from here, validation might fail if the document uses them.
-        # But if I keep them, they are just strings in enum.
         "https://json-schema.org/draft/2019-09/schema",
         "http://json-schema.org/draft-07/schema#",
         "http://json-schema.org/draft-06/schema#",
@@ -17,14 +15,14 @@ module JsonSchemer
 
       def self.dialect_schema(dialect : String)
         {
-          "$id"   => JSON::Any.new(dialect.hash.to_s), # object_id in Ruby, hash in Crystal
-          "$ref"  => JSON::Any.new("https://spec.openapis.org/oas/3.1/schema/2022-10-07"),
+          "$id"   => JSON::Any.new(dialect.hash.to_s),
+          "$ref"  => JSON::Any.new("https://spec.openapis.org/oas/3.2/schema/2025-09-17"),
           "$defs" => JSON::Any.new({
             "schema" => JSON::Any.new({
               "$dynamicAnchor" => JSON::Any.new("meta"),
               "properties"     => JSON::Any.new({
                 "$schema" => JSON::Any.new({
-                  "$ref" => JSON::Any.new("json-schemer://openapi31/schema-base#/$defs/dialect"),
+                  "$ref" => JSON::Any.new("json-schemer://openapi32/schema-base#/$defs/dialect"),
                 }),
               }),
               "allOf" => JSON::Any.new([
@@ -62,7 +60,7 @@ module JsonSchemer
       end
 
       SCHEMA_BASE = {
-        "$id"     => JSON::Any.new("json-schemer://openapi31/schema-base"),
+        "$id"     => JSON::Any.new("json-schemer://openapi32/schema-base"),
         "$schema" => JSON::Any.new("https://json-schema.org/draft/2020-12/schema"),
         "$defs"   => JSON::Any.new({
           "dialect" => JSON::Any.new({
@@ -103,14 +101,24 @@ module JsonSchemer
 
       SCHEMA_JSON = {{ read_file("#{__DIR__}/schema.json") }}
       # Convert JSON::Any to Hash(String, JSON::Any)
-      SCHEMA = JSON.parse(SCHEMA_JSON).as_h
+      SCHEMA = JSON.parse(SCHEMA_JSON).as_h.tap do |schema|
+        # Patch schema to allow OpenAPI 3.1 versions
+        if props = schema["properties"]?.try(&.as_h)
+          if openapi = props["openapi"]?.try(&.as_h)
+            # Allow 3.1.x and 3.2.x
+            # Original: ^3\\.2\\.\\d+(-.+)?$
+            # New: ^3\\.(1|2)\\.\\d+(-.+)?$
+            openapi["pattern"] = JSON::Any.new("^3\\.(1|2)\\.\\d+(-.+)?$")
+          end
+        end
+      end
 
-      SCHEMAS = OpenAPI31::Meta::SCHEMAS.merge(Draft202012::Meta::SCHEMAS).merge({
-        URI.parse("https://spec.openapis.org/oas/3.1/schema/2022-10-07") => SCHEMA,
-        OpenAPI31::BASE_URI                                              => OpenAPI31::SCHEMA,
+      SCHEMAS = OpenAPI32::Meta::SCHEMAS.merge(Draft202012::Meta::SCHEMAS).merge({
+        URI.parse("https://spec.openapis.org/oas/3.2/schema/2025-09-17") => SCHEMA,
+        OpenAPI32::BASE_URI                                              => OpenAPI32::SCHEMA,
+        URI.parse(JsonSchemer::OPENAPI31_DIALECT_ID)                     => OpenAPI32::SCHEMA_3_1,
         Draft202012::BASE_URI                                            => Draft202012::SCHEMA,
-        # json-schemer://openapi31/schema-base is needed
-        URI.parse("json-schemer://openapi31/schema-base") => SCHEMA_BASE,
+        URI.parse("json-schemer://openapi32/schema-base")                => SCHEMA_BASE,
       })
 
       SCHEMAS_RESOLVER = ->(uri : URI) : JSONHash? {
