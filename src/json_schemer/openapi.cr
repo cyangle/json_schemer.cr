@@ -31,14 +31,7 @@ module JsonSchemer
       case version
       when /\A3\.[12]\.\d+\z/
         @document_schema = JsonSchemer.openapi32_document
-        resolved_meta_schema = document["jsonSchemaDialect"]?.try(&.as_s)
-        unless resolved_meta_schema
-          if version && version.starts_with?("3.1")
-            resolved_meta_schema = OPENAPI31_DIALECT_ID
-          else
-            resolved_meta_schema = OpenAPI32::BASE_URI.to_s
-          end
-        end
+        resolved_meta_schema = resolve_meta_schema(document, version)
       else
         raise UnsupportedOpenAPIVersion.new(version.to_s)
       end
@@ -63,6 +56,22 @@ module JsonSchemer
         resolve_enumerators: resolve_enumerators,
         access_mode: access_mode
       )
+    end
+
+    # Resolves the meta-schema URI for the given OpenAPI document.
+    # Returns the jsonSchemaDialect if explicitly set, otherwise
+    # selects the appropriate dialect based on the OpenAPI version.
+    private def resolve_meta_schema(document : JSONHash, version : String?) : String
+      # Use explicitly specified dialect if provided
+      dialect = document["jsonSchemaDialect"]?.try(&.as_s)
+      return dialect if dialect
+
+      # Default dialect based on version
+      if version && version.starts_with?("3.1")
+        OPENAPI31_DIALECT_ID
+      else
+        OpenAPI32::BASE_URI.to_s
+      end
     end
 
     # Checks if the OpenAPI document itself is valid against the OpenAPI specification.

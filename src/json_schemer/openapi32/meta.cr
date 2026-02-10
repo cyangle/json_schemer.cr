@@ -49,7 +49,7 @@ module JsonSchemer
 
     SCHEMA_3_1 = JSONHash.from_json(<<-JSON
     {
-      "$id": "https://spec.openapis.org/oas/3.1/dialect/base",
+      "$id": "https://spec.openapis.org/oas/3.1/schema/2025-09-15",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "title": "OpenAPI 3.1 Schema Object Dialect",
       "description": "A JSON Schema dialect describing schemas found in OpenAPI documents",

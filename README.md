@@ -13,7 +13,7 @@ A Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_
 ## Features
 
 - **JSON Schema Draft 2020-12** compliant
-- **OpenAPI 3.1** schema validation support
+- **OpenAPI 3.1 and 3.2** schema validation support
 - Multiple output formats: `flag`, `basic`, `classic`
 - Custom format validators
 - Custom keyword validators or **Custom keyword classes**
@@ -240,7 +240,7 @@ Specifies which meta-schema to use for validating the schema itself. Defaults to
 # Use OpenAPI 3.1 dialect
 schema = JsonSchemer.schema(
   schema_hash,
-  meta_schema: "https://spec.openapis.org/oas/3.1/dialect/base"
+  meta_schema: "https://spec.openapis.org/oas/3.1/schema/2025-09-15"
 )
 
 # Use a custom meta-schema
