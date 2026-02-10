@@ -1,6 +1,22 @@
 module JsonSchemer
-  module OpenAPI32
-    BASE_URI = URI.parse(OPENAPI32_DIALECT_ID)
+  module OpenAPI3
+    BASE_ID_3_2  = "https://spec.openapis.org/oas/3.2/dialect/base"
+    BASE_ID_3_1  = "https://spec.openapis.org/oas/3.1/dialect/base"
+    BASE_URI_3_2 = URI.parse(BASE_ID_3_2)
+    BASE_URI_3_1 = URI.parse(BASE_ID_3_1)
+
+    DIALECT_ID_3_2  = "https://spec.openapis.org/oas/3.2/dialect/2025-09-17"
+    DIALECT_ID_3_1  = "https://spec.openapis.org/oas/3.1/dialect/2025-09-15"
+    DIALECT_URI_3_2 = URI.parse(DIALECT_ID_3_2)
+    DIALECT_URI_3_1 = URI.parse(DIALECT_ID_3_1)
+
+    BASE_VOCAB_ID_3_2 = "https://spec.openapis.org/oas/3.2/vocab/base"
+    BASE_VOCAB_ID_3_1 = "https://spec.openapis.org/oas/3.1/vocab/base"
+
+    BASE_META_ID_3_2  = "https://spec.openapis.org/oas/3.2/meta/base"
+    BASE_META_ID_3_1  = "https://spec.openapis.org/oas/3.1/meta/base"
+    BASE_META_URI_3_2 = URI.parse(BASE_META_ID_3_2)
+    BASE_META_URI_3_1 = URI.parse(BASE_META_ID_3_1)
 
     FORMATS = {
       "int32" => ->(instance : JSON::Any, _format : String) {
@@ -22,65 +38,66 @@ module JsonSchemer
       },
     } of String => Format::FormatValidator
 
-    SCHEMA = JSONHash.from_json(<<-JSON
-    {
-      "$id": "https://spec.openapis.org/oas/3.2/dialect/2025-09-17",
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "title": "OpenAPI 3.2 Schema Object Dialect",
-      "description": "A JSON Schema dialect describing schemas found in OpenAPI documents",
-      "$vocabulary": {
-        "https://json-schema.org/draft/2020-12/vocab/core": true,
-        "https://json-schema.org/draft/2020-12/vocab/applicator": true,
-        "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
-        "https://json-schema.org/draft/2020-12/vocab/validation": true,
-        "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
-        "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
-        "https://json-schema.org/draft/2020-12/vocab/content": true,
-        "https://spec.openapis.org/oas/3.2/vocab/base": false
-      },
-      "$dynamicAnchor": "meta",
-      "allOf": [
-        { "$ref": "https://json-schema.org/draft/2020-12/schema" },
-        { "$ref": "https://spec.openapis.org/oas/3.2/meta/base" }
-      ]
-    }
-    JSON
+    SCHEMA_3_2 = JSONHash.from_json(<<-JSON
+      {
+        "$id": "#{BASE_ID_3_2}",
+        "$schema": "#{JsonSchemer::Draft202012::ID}",
+        "title": "OpenAPI 3.2 Schema Object Dialect",
+        "description": "A JSON Schema dialect describing schemas found in OpenAPI documents",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/core": true,
+          "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+          "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+          "https://json-schema.org/draft/2020-12/vocab/validation": true,
+          "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+          "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+          "https://json-schema.org/draft/2020-12/vocab/content": true,
+          "#{BASE_VOCAB_ID_3_2}": true
+        },
+        "$dynamicAnchor": "meta",
+        "allOf": [
+          { "$ref": "#{JsonSchemer::Draft202012::ID}" },
+          { "$ref": "#{BASE_META_ID_3_2}" }
+        ]
+      }
+      JSON
     )
 
     SCHEMA_3_1 = JSONHash.from_json(<<-JSON
-    {
-      "$id": "https://spec.openapis.org/oas/3.1/schema/2025-09-15",
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "title": "OpenAPI 3.1 Schema Object Dialect",
-      "description": "A JSON Schema dialect describing schemas found in OpenAPI documents",
-      "$vocabulary": {
-        "https://json-schema.org/draft/2020-12/vocab/core": true,
-        "https://json-schema.org/draft/2020-12/vocab/applicator": true,
-        "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
-        "https://json-schema.org/draft/2020-12/vocab/validation": true,
-        "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
-        "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
-        "https://json-schema.org/draft/2020-12/vocab/content": true,
-        "https://spec.openapis.org/oas/3.1/vocab/base": false
-      },
+      {
+        "$id": "#{BASE_ID_3_1}",
+        "$schema": "#{JsonSchemer::Draft202012::ID}",
+        "title": "OpenAPI 3.1 Schema Object Dialect",
+        "description": "A JSON Schema dialect describing schemas found in OpenAPI documents",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/core": true,
+          "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+          "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+          "https://json-schema.org/draft/2020-12/vocab/validation": true,
+          "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+          "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+          "https://json-schema.org/draft/2020-12/vocab/content": true,
+          "#{BASE_VOCAB_ID_3_1}": true
+        },
+
       "$dynamicAnchor": "meta",
       "allOf": [
-        { "$ref": "https://json-schema.org/draft/2020-12/schema" },
-        { "$ref": "https://spec.openapis.org/oas/3.1/meta/base" }
+        { "$ref": "#{JsonSchemer::Draft202012::ID}" },
+        { "$ref": "#{BASE_META_ID_3_1}" }
       ]
     }
     JSON
     )
 
     module Meta
-      BASE = JSONHash.from_json(<<-JSON
+      BASE_3_2 = JSONHash.from_json(<<-JSON
       {
-        "$id": "https://spec.openapis.org/oas/3.2/meta/base",
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#{BASE_META_ID_3_2}",
+        "$schema": "#{JsonSchemer::Draft202012::ID}",
         "title": "OAS Base vocabulary",
         "description": "A JSON Schema Vocabulary used in the OpenAPI Schema Dialect",
         "$vocabulary": {
-          "https://spec.openapis.org/oas/3.2/vocab/base": true,
+          "#{BASE_VOCAB_ID_3_2}": true,
           "https://json-schema.org/draft/2020-12/vocab/core": true,
           "https://json-schema.org/draft/2020-12/vocab/applicator": true,
           "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
@@ -129,12 +146,12 @@ module JsonSchemer
 
       BASE_3_1 = JSONHash.from_json(<<-JSON
       {
-        "$id": "https://spec.openapis.org/oas/3.1/meta/base",
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#{BASE_META_ID_3_1}",
+        "$schema": "#{JsonSchemer::Draft202012::ID}",
         "title": "OAS Base vocabulary",
         "description": "A JSON Schema Vocabulary used in the OpenAPI Schema Dialect",
         "$vocabulary": {
-          "https://spec.openapis.org/oas/3.1/vocab/base": true,
+          "#{BASE_VOCAB_ID_3_1}": true,
           "https://json-schema.org/draft/2020-12/vocab/core": true,
           "https://json-schema.org/draft/2020-12/vocab/applicator": true,
           "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
@@ -182,9 +199,9 @@ module JsonSchemer
       )
 
       SCHEMAS = Draft202012::Meta::SCHEMAS.merge({
-        Draft202012::BASE_URI                                    => Draft202012::SCHEMA,
-        URI.parse("https://spec.openapis.org/oas/3.2/meta/base") => BASE,
-        URI.parse("https://spec.openapis.org/oas/3.1/meta/base") => BASE_3_1,
+        Draft202012::BASE_URI => Draft202012::SCHEMA,
+        BASE_META_URI_3_2     => BASE_3_2,
+        BASE_META_URI_3_1     => BASE_3_1,
       })
 
       SCHEMAS_RESOLVER = ->(uri : URI) : JSONHash? {

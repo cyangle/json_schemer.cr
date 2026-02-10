@@ -12,7 +12,6 @@ require "hana"
 {% end %}
 
 require "./json_schemer/version"
-require "./json_schemer/constants"
 require "./json_schemer/errors"
 require "./json_schemer/location"
 require "./json_schemer/resources"
@@ -34,10 +33,10 @@ require "./json_schemer/draft202012/vocab/content"
 require "./json_schemer/draft202012/vocab/meta_data"
 require "./json_schemer/draft202012/vocab"
 require "./json_schemer/draft202012/meta"
-require "./json_schemer/openapi32/vocab/base"
-require "./json_schemer/openapi32/vocab"
-require "./json_schemer/openapi32/meta"
-require "./json_schemer/openapi32/document"
+require "./json_schemer/openapi3/vocab/base"
+require "./json_schemer/openapi3/vocab"
+require "./json_schemer/openapi3/meta"
+require "./json_schemer/openapi3/document"
 require "./json_schemer/schema"
 require "./json_schemer/openapi"
 
@@ -232,10 +231,10 @@ module JsonSchemer
   # Get OpenAPI 3.1 schema
   def self.openapi31 : Schema
     @@openapi31 ||= Schema.new(
-      OpenAPI32::SCHEMA_3_1,
-      base_uri: URI.parse(OPENAPI31_DIALECT_ID),
-      formats: OpenAPI32::FORMATS,
-      ref_resolver: OpenAPI32::Meta::SCHEMAS_RESOLVER,
+      OpenAPI3::SCHEMA_3_1,
+      base_uri: OpenAPI3::BASE_URI_3_1,
+      formats: OpenAPI3::FORMATS,
+      ref_resolver: OpenAPI3::Meta::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
   end
@@ -243,8 +242,8 @@ module JsonSchemer
   # Get OpenAPI 3.1 document schema
   def self.openapi31_document : Schema
     @@openapi31_document ||= Schema.new(
-      OpenAPI32::Document::SCHEMA_BASE,
-      ref_resolver: OpenAPI32::Document::SCHEMAS_RESOLVER,
+      OpenAPI3::Document::SCHEMA_BASE,
+      ref_resolver: OpenAPI3::Document::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
   end
@@ -252,21 +251,26 @@ module JsonSchemer
   # Get OpenAPI 3.2 schema
   def self.openapi32 : Schema
     @@openapi32 ||= Schema.new(
-      OpenAPI32::SCHEMA,
-      base_uri: OpenAPI32::BASE_URI,
-      formats: OpenAPI32::FORMATS,
-      ref_resolver: OpenAPI32::Meta::SCHEMAS_RESOLVER,
+      OpenAPI3::SCHEMA_3_2,
+      base_uri: OpenAPI3::BASE_URI_3_2,
+      formats: OpenAPI3::FORMATS,
+      ref_resolver: OpenAPI3::Meta::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
   end
 
-  # Get OpenAPI 3.2 document schema
-  def self.openapi32_document : Schema
-    @@openapi32_document ||= Schema.new(
-      OpenAPI32::Document::SCHEMA_BASE,
-      ref_resolver: OpenAPI32::Document::SCHEMAS_RESOLVER,
+  # Get OpenAPI 3.x document schema
+  def self.openapi3_document : Schema
+    @@openapi3_document ||= Schema.new(
+      OpenAPI3::Document::SCHEMA_BASE,
+      ref_resolver: OpenAPI3::Document::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
+  end
+
+  # Get OpenAPI 3.2 document schema (alias for openapi3_document)
+  def self.openapi32_document : Schema
+    openapi3_document
   end
 
   # Creates an `OpenAPI` handler for the given OpenAPI document.
@@ -370,17 +374,17 @@ module JsonSchemer
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/format-assertion"] = Draft202012::Vocab::FORMAT_ASSERTION
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/content"] = Draft202012::Vocab::CONTENT
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/meta-data"] = Draft202012::Vocab::META_DATA
-    VOCABULARIES["https://spec.openapis.org/oas/3.1/vocab/base"] = OpenAPI32::Vocab::BASE
-    VOCABULARIES["https://spec.openapis.org/oas/3.2/vocab/base"] = OpenAPI32::Vocab::BASE
+    VOCABULARIES["https://spec.openapis.org/oas/3.1/vocab/base"] = OpenAPI3::Vocab::BASE
+    VOCABULARIES["https://spec.openapis.org/oas/3.2/vocab/base"] = OpenAPI3::Vocab::BASE
 
     VOCABULARIES.each_with_index do |(vocab, _keywords), index|
       VOCABULARY_ORDER[vocab] = index
     end
 
     # Register meta schemas for quick lookup
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[DRAFT202012_ID] = -> { draft202012 }
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OPENAPI31_DIALECT_ID] = -> { openapi31 }
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OPENAPI32_DIALECT_ID] = -> { openapi32 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[Draft202012::ID] = -> { draft202012 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OpenAPI3::DIALECT_ID_3_1] = -> { openapi31 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OpenAPI3::DIALECT_ID_3_2] = -> { openapi32 }
   end
 
   # Meta schema lookup

@@ -30,7 +30,7 @@ module JsonSchemer
       version = document["openapi"]?.try(&.as_s)
       case version
       when /\A3\.[12]\.\d+\z/
-        @document_schema = JsonSchemer.openapi32_document
+        @document_schema = JsonSchemer.openapi3_document
         resolved_meta_schema = resolve_meta_schema(document, version)
       else
         raise UnsupportedOpenAPIVersion.new(version.to_s)
@@ -68,9 +68,9 @@ module JsonSchemer
 
       # Default dialect based on version
       if version && version.starts_with?("3.1")
-        OPENAPI31_DIALECT_ID
+        OpenAPI3::DIALECT_ID_3_1
       else
-        OpenAPI32::BASE_URI.to_s
+        OpenAPI3::DIALECT_ID_3_2
       end
     end
 
@@ -107,7 +107,25 @@ module JsonSchemer
     # user_schema = openapi.ref("#/components/schemas/User")
     # ```
     def ref(value : String) : Schema
-      @schema.ref(value)
+      begin
+        @schema.ref(value)
+      rescue e : InvalidRefPointer
+        if value.starts_with?("#/")
+          path = value[1..]
+          begin
+            target = Hana::Pointer.new(path).eval(JSON::Any.new(@document.transform_values { |v| v }))
+            Schema.new(
+              target,
+              root: @schema,
+              configuration: @schema.configuration
+            )
+          rescue
+            raise e
+          end
+        else
+          raise e
+        end
+      end
     end
 
     # Retrieves a schema definition from `#/components/schemas`.
