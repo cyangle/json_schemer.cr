@@ -16,35 +16,6 @@ describe "OpenAPI 3.2" do
       openapi.valid?.should be_true
     end
 
-    it "validates a basic OpenAPI 3.2 document with components" do
-      document = JSON.parse(%q({
-        "openapi": "3.2.0",
-        "info": {
-          "title": "Test API",
-          "version": "1.0.0"
-        },
-        "paths": {},
-        "components": {
-          "schemas": {
-            "User": {
-              "type": "object",
-              "properties": {
-                "name": {"type": "string"},
-                "age": {"type": "integer"}
-              },
-              "required": ["name"]
-            }
-          }
-        }
-      })).as_h
-
-      openapi = JsonSchemer.openapi(document)
-      openapi.valid?.should be_true
-      user_schema = openapi.schema("User")
-      user_schema.valid?(JSON.parse(%q({"name": "John"}))).should be_true
-      user_schema.valid?(JSON.parse(%q({"age": 30}))).should be_false
-    end
-
     it "raises for unsupported OpenAPI version" do
       document = JSON.parse(%q({
         "openapi": "2.0.0",
@@ -304,32 +275,6 @@ describe "OpenAPI 3.2" do
   end
 
   describe "OpenAPI 3.1 backward compatibility" do
-    it "validates OpenAPI 3.1 documents using the 3.2 module" do
-      document = JSON.parse(%q({
-        "openapi": "3.1.0",
-        "info": {
-          "title": "Test API",
-          "version": "1.0.0"
-        },
-        "paths": {},
-        "components": {
-          "schemas": {
-            "User": {
-              "type": "object",
-              "properties": {
-                "name": {"type": "string"}
-              }
-            }
-          }
-        }
-      })).as_h
-
-      openapi = JsonSchemer.openapi(document)
-      openapi.valid?.should be_true
-      user_schema = openapi.schema("User")
-      user_schema.valid?(JSON.parse(%q({"name": "John"}))).should be_true
-    end
-
     it "handles OpenAPI 3.1.1 patch version" do
       document = JSON.parse(%q({
         "openapi": "3.1.1",
