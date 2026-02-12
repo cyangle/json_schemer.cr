@@ -155,41 +155,6 @@ module JsonSchemer
             end
           end
         end
-
-        # Schemas keyword (used inside components)
-        class Schemas < Keyword
-          protected def parse
-            parse_subschema_hash
-          end
-        end
-
-        # Components keyword
-        class Components < Keyword
-          @schemas : Schemas?
-
-          def initialize(value : JSON::Any, parent : Schema | Keyword, keyword : String, schema : Schema? = nil)
-            # puts "Components initialized for #{keyword}"
-            super
-          end
-
-          protected def parse
-            if value.as_h?
-              if schemas = value.as_h["schemas"]?
-                @schemas = Schemas.new(schemas, self, "schemas")
-              end
-            end
-            value
-          end
-
-          def fetch(key : String) : Keyword | Schema
-            case key
-            when "schemas"
-              @schemas || raise KeyError.new("Key not found: schemas")
-            else
-              raise KeyError.new("Key not found: #{key}")
-            end
-          end
-        end
       end
     end
   end
