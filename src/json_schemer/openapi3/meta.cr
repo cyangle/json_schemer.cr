@@ -115,9 +115,9 @@ module JsonSchemer
               "mapping": {
                 "type": "object",
                 "additionalProperties": { "type": "string" }
-              }
+              },
+              "defaultMapping": { "type": "string" }
             },
-            "required": ["propertyName"],
             "unevaluatedProperties": false
           },
           "externalDocs": {
