@@ -60,12 +60,22 @@ module JsonSchemer
             value.as_h["mapping"]?.try(&.as_h) || {} of String => JSON::Any
           end
 
+          # OpenAPI 3.2: defaultMapping provides a fallback schema when discriminator value doesn't match
+          def default_mapping : String?
+            value.as_h["defaultMapping"]?.try(&.as_s)
+          end
+
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
               return result(instance, instance_location, location, false)
             end
 
-            property_name = value.as_h["propertyName"].as_s
+            # OpenAPI 3.2: propertyName is optional
+            # If missing, skip discriminator validation and let underlying schema handle it
+            property_name_val = value.as_h["propertyName"]?
+            return nil unless property_name_val
+
+            property_name = property_name_val.as_s
             unless instance.as_h.has_key?(property_name)
               return result(instance, instance_location, location, false)
             end
@@ -74,6 +84,14 @@ module JsonSchemer
             return result(instance, instance_location, location, false) unless property_value
 
             subschema = resolve_subschema(property_value)
+
+            # OpenAPI 3.2: If no matching subschema and defaultMapping is set, use it as fallback
+            unless subschema
+              if default_map = default_mapping
+                subschema = resolve_default_mapping(default_map)
+              end
+            end
+
             return result(instance, instance_location, location, false) unless subschema
 
             return nil if skip_ref_once == subschema.absolute_keyword_location
@@ -141,6 +159,22 @@ module JsonSchemer
                            property_value
                          end
 
+            if FIXED_FIELD_REGEX.matches?(schema_ref)
+              begin
+                return schema.ref("#/components/schemas/#{schema_ref}")
+              rescue InvalidRefPointer
+              end
+            end
+
+            begin
+              schema.ref(schema_ref)
+            rescue InvalidRefResolution | UnknownRef
+              nil
+            end
+          end
+
+          # OpenAPI 3.2: Resolve defaultMapping fallback schema reference
+          private def resolve_default_mapping(schema_ref : String) : Schema?
             if FIXED_FIELD_REGEX.matches?(schema_ref)
               begin
                 return schema.ref("#/components/schemas/#{schema_ref}")
