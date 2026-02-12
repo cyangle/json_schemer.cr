@@ -30,7 +30,10 @@ module JsonSchemer
       version = document["openapi"]?.try(&.as_s)
       case version
       when /\A3\.[12]\.\d+\z/
-        @document_schema = JsonSchemer.openapi3_document
+        # Use the cached document schema based on entrypoint
+        # The schema-base files have const values for jsonSchemaDialect
+        entrypoint_uri = OpenAPI3.select_entrypoint(document)
+        @document_schema = OpenAPI3.document_schema(entrypoint_uri)
         resolved_meta_schema = resolve_meta_schema(document, version)
       else
         raise UnsupportedOpenAPIVersion.new(version.to_s)
@@ -62,16 +65,12 @@ module JsonSchemer
     # Returns the jsonSchemaDialect if explicitly set, otherwise
     # selects the appropriate dialect based on the OpenAPI version.
     private def resolve_meta_schema(document : JSONHash, version : String?) : String
-      # Use explicitly specified dialect if provided
+      # Use explicitly specified dialect if provided (takes precedence)
       dialect = document["jsonSchemaDialect"]?.try(&.as_s)
       return dialect if dialect
 
       # Default dialect based on version
-      if version && version.starts_with?("3.1")
-        OpenAPI3::DIALECT_ID_3_1
-      else
-        OpenAPI3::DIALECT_ID_3_2
-      end
+      OpenAPI3.select_dialect_schema(version).to_s
     end
 
     # Checks if the OpenAPI document itself is valid against the OpenAPI specification.

@@ -204,6 +204,7 @@ module JsonSchemer
         access_mode: access_mode || base_config.access_mode
       )
       @configuration = config
+      # debugger if meta_schema == "https://spec.openapis.org/oas/3.1/dialect/2024-11-10"
 
       @base_uri = config.base_uri
       @meta_schema = config.meta_schema

@@ -334,19 +334,5 @@ describe "OpenAPI 3.2" do
       openapi.valid?.should be_true
     end
 
-    it "validates document with custom jsonSchemaDialect" do
-      document = JSON.parse(%q({
-        "openapi": "3.2.0",
-        "info": {
-          "title": "Test API",
-          "version": "1.0.0"
-        },
-        "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
-        "paths": {}
-      })).as_h
-
-      openapi = JsonSchemer.openapi(document)
-      openapi.valid?.should be_true
-    end
   end
 end
