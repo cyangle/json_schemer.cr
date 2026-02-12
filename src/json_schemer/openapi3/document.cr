@@ -128,10 +128,10 @@ module JsonSchemer
       SCHEMA_3_2      = JSONHash.from_json(SCHEMA_JSON_3_2)
 
       SCHEMAS = OpenAPI3::Meta::SCHEMAS.merge(Draft202012::Meta::SCHEMAS).merge({
-        OpenAPI3::BASE_URI_3_2                                           => OpenAPI3::SCHEMA_3_2,
-        OpenAPI3::BASE_URI_3_1                                           => OpenAPI3::SCHEMA_3_1,
         URI.parse("https://spec.openapis.org/oas/3.2/schema/2025-09-17") => SCHEMA_3_2,
         URI.parse("https://spec.openapis.org/oas/3.1/schema/2025-09-15") => SCHEMA_3_1,
+        OpenAPI3::BASE_URI_3_2                                           => OpenAPI3::SCHEMA_3_2,
+        OpenAPI3::BASE_URI_3_1                                           => OpenAPI3::SCHEMA_3_1,
         Draft202012::BASE_URI                                            => Draft202012::SCHEMA,
       })
 

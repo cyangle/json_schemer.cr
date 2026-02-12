@@ -52,7 +52,7 @@ module JsonSchemer
           "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
           "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
           "https://json-schema.org/draft/2020-12/vocab/content": true,
-          "#{BASE_VOCAB_ID_3_2}": true
+          "#{BASE_VOCAB_ID_3_2}": false
         },
         "$dynamicAnchor": "meta",
         "allOf": [
@@ -77,7 +77,7 @@ module JsonSchemer
           "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
           "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
           "https://json-schema.org/draft/2020-12/vocab/content": true,
-          "#{BASE_VOCAB_ID_3_1}": true
+          "#{BASE_VOCAB_ID_3_1}": false
         },
 
       "$dynamicAnchor": "meta",
@@ -97,19 +97,17 @@ module JsonSchemer
         "title": "OAS Base vocabulary",
         "description": "A JSON Schema Vocabulary used in the OpenAPI Schema Dialect",
         "$vocabulary": {
-          "#{BASE_VOCAB_ID_3_2}": true,
-          "https://json-schema.org/draft/2020-12/vocab/core": true,
-          "https://json-schema.org/draft/2020-12/vocab/applicator": true,
-          "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
-          "https://json-schema.org/draft/2020-12/vocab/validation": true,
-          "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
-          "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
-          "https://json-schema.org/draft/2020-12/vocab/content": true
+          "#{BASE_VOCAB_ID_3_2}": true
         },
         "$dynamicAnchor": "meta",
         "type": ["object", "boolean"],
         "properties": {
           "example": true,
+          "extensible": {
+            "patternProperties": {
+              "^x-": true
+            }
+          },
           "discriminator": {
             "type": "object",
             "properties": {
@@ -119,7 +117,8 @@ module JsonSchemer
                 "additionalProperties": { "type": "string" }
               }
             },
-            "required": ["propertyName"]
+            "required": ["propertyName"],
+            "unevaluatedProperties": false
           },
           "externalDocs": {
             "type": "object",
@@ -151,14 +150,7 @@ module JsonSchemer
         "title": "OAS Base vocabulary",
         "description": "A JSON Schema Vocabulary used in the OpenAPI Schema Dialect",
         "$vocabulary": {
-          "#{BASE_VOCAB_ID_3_1}": true,
-          "https://json-schema.org/draft/2020-12/vocab/core": true,
-          "https://json-schema.org/draft/2020-12/vocab/applicator": true,
-          "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
-          "https://json-schema.org/draft/2020-12/vocab/validation": true,
-          "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
-          "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
-          "https://json-schema.org/draft/2020-12/vocab/content": true
+          "#{BASE_VOCAB_ID_3_1}": true
         },
         "$dynamicAnchor": "meta",
         "type": ["object", "boolean"],
