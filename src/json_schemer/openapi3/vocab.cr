@@ -1,5 +1,5 @@
 module JsonSchemer
-  module OpenAPI31
+  module OpenAPI3
     module Vocab
       BASE = {
         "allOf"         => Base::AllOf,

@@ -82,12 +82,40 @@ module JsonSchemer
 
     property! base_uri : URI
     property! meta_schema : Schema | String
-    property! keywords : Hash(String, Keyword.class)
-    property! keyword_order : Hash(String, Int32)
+    @keywords : Hash(String, Keyword.class)?
+    @keyword_order : Hash(String, Int32)?
     property! value : JSON::Any
     property! root : Schema
     property! configuration : Configuration
     property! parsed : Hash(String, Keyword)
+
+    def keywords=(@keywords)
+    end
+
+    def keyword_order=(@keyword_order)
+    end
+
+    def keywords : Hash(String, Keyword.class)
+      @keywords || (
+        meta = @meta_schema
+        if meta.is_a?(Schema) && meta != self
+          meta.keywords
+        else
+          Draft202012::Vocab::ALL
+        end
+      )
+    end
+
+    def keyword_order : Hash(String, Int32)
+      @keyword_order || (
+        meta = @meta_schema
+        if meta.is_a?(Schema) && meta != self
+          meta.keyword_order
+        else
+          {} of String => Int32 # Default order
+        end
+      )
+    end
 
     getter parent : Schema | Keyword | Nil
 
@@ -204,6 +232,7 @@ module JsonSchemer
         access_mode: access_mode || base_config.access_mode
       )
       @configuration = config
+      # debugger if meta_schema == "https://spec.openapis.org/oas/3.1/dialect/2024-11-10"
 
       @base_uri = config.base_uri
       @meta_schema = config.meta_schema
@@ -547,7 +576,8 @@ module JsonSchemer
                            end
       compound_document[defs_keyword] = JSON::Any.new(embedded_resources)
 
-      ref_keyword_class = meta.keywords["$ref"]?
+      kws = meta.keywords
+      ref_keyword_class = kws ? kws["$ref"]? : nil
       if ref_keyword_class && ref_keyword_class.exclusive? && compound_document.has_key?("$ref")
         all_of = if compound_document.has_key?("allOf")
                    compound_document["allOf"].as_a.dup
@@ -721,71 +751,67 @@ module JsonSchemer
       io << ">"
     end
 
+    def keywords : Hash(String, Keyword.class)
+      @keywords || resolved_meta_schema.keywords
+    end
+
+    def keyword_order : Hash(String, Int32)
+      @keyword_order || resolved_meta_schema.keyword_order
+    end
+
     private def parse
       val = value
-      # Parse $schema first
+      @parsed = {} of String => Keyword
+
+      # 1. Parse $schema (sets meta_schema property)
       if val.raw.is_a?(Hash) && val.as_h.has_key?("$schema")
         parsed["$schema"] = SCHEMA_KEYWORD_CLASS.new(val.as_h["$schema"], self, "$schema")
       elsif meta_schema.is_a?(String)
         SCHEMA_KEYWORD_CLASS.new(JSON::Any.new(meta_schema.as(String)), self, "$schema")
       end
 
-      # Parse $vocabulary
+      # 2. Parse $vocabulary (sets @keywords property)
       if val.raw.is_a?(Hash) && val.as_h.has_key?("$vocabulary")
         parsed["$vocabulary"] = VOCABULARY_KEYWORD_CLASS.new(val.as_h["$vocabulary"], self, "$vocabulary")
       elsif vocab = configuration.vocabulary
         VOCABULARY_KEYWORD_CLASS.new(JSON::Any.new(vocab.transform_values { |v| JSON::Any.new(v) }), self, "$vocabulary")
       end
 
-      # Parse $id for root
-      if root == self && val.raw.is_a?(Hash)
-        unless val.as_h.has_key?(resolved_meta_schema.id_keyword)
-          ID_KEYWORD_CLASS.new(JSON::Any.new(base_uri.to_s), self, resolved_meta_schema.id_keyword)
-        end
+      # 3. Determine lookup table for remaining keys
+      meta = resolved_meta_schema
+      lookup_keywords = meta.keywords
+      lookup_keyword_order = meta.keyword_order
+
+      # 4. Handle root $id specially
+      ref_kw = lookup_keywords["$ref"]?
+      exclusive_ref = val.raw.is_a?(Hash) && val.as_h.has_key?("$ref") && ref_kw && ref_kw.responds_to?(:exclusive?) && ref_kw.exclusive?
+
+      if root == self && (!val.raw.is_a?(Hash) || !val.as_h.has_key?(meta.id_keyword) || exclusive_ref)
+        ID_KEYWORD_CLASS.new(JSON::Any.new(base_uri.to_s), self, meta.id_keyword)
       end
 
-      # If keywords are not set yet (no $vocabulary), inherit from meta-schema
-      if @keywords.nil?
-        meta = resolved_meta_schema
-        # If meta-schema is self and keywords are not set, it means we are bootstrapping a meta-schema
-        # that doesn't use $vocabulary (e.g. Draft 4/6/7 or custom).
-        # In this case, we can't inherit. We rely on the defaults being set if it's a known meta-schema,
-        # but here we are creating it.
-        # For standard drafts, we provided vocabulary/keywords in configuration or they are built-in.
-        if meta != self
-          kw = meta.keywords.dup
-          # Apply format assertion override if enabled
-          if configuration.format && kw.has_key?("format")
-            kw["format"] = Draft202012::Vocab::FormatAssertion::Format
-          end
-          @keywords = kw
-          @keyword_order = meta.keyword_order
-        else
-          # Fallback for self-referencing meta-schema without $vocabulary
-          # This should only happen for older drafts or broken schemas.
-          # For Draft 2020-12, $vocabulary is present so keywords are set.
-          # For older drafts, we use `vocabulary` option in singleton creation.
-          if @keywords.nil?
-            # Last resort fallback to empty or default?
-            # For now, let's use Draft 2020-12 default if absolutely nothing else
-            # But this might be wrong if it's a completely different schema.
-            # Ideally this path is not taken for valid scenarios.
-            kw_hash = Draft202012::Vocab::ALL.dup
-            @keywords = kw_hash
-            @keyword_order = kw_hash.keys.each_with_index.to_h { |k, i| {k, i} }
-          end
+      # 5. Parse remaining keywords
+      if exclusive_ref && val.raw.is_a?(Hash)
+        parsed["$ref"] = lookup_keywords["$ref"].new(val.as_h["$ref"], self, "$ref")
+        dkw = meta.defs_keyword
+        if val.as_h.has_key?(dkw) && lookup_keywords.has_key?(dkw)
+          parsed[dkw] = lookup_keywords[dkw].new(val.as_h[dkw], self, dkw)
         end
-      end
-
-      # Parse remaining keywords
-      if val.raw.is_a?(Hash)
-        # Sort by keyword order
-        sorted_keys = val.as_h.keys.sort_by! { |k| keyword_order[k]? || Int32::MAX }
+      elsif val.raw.is_a?(Hash)
+        # Sort by keyword order from meta-schema
+        last = lookup_keywords.size
+        sorted_keys = val.as_h.keys.sort_by! { |k| lookup_keyword_order[k]? || last }
 
         sorted_keys.each do |key|
           next if parsed.has_key?(key)
           kval = val.as_h[key]
-          klass = keywords[key]? || UNKNOWN_KEYWORD_CLASS
+
+          klass = if configuration.format && key == "format"
+                    Draft202012::Vocab::FormatAssertion::Format
+                  else
+                    lookup_keywords[key]? || UNKNOWN_KEYWORD_CLASS
+                  end
+
           parsed[key] = klass.new(kval, self, key)
         end
       end

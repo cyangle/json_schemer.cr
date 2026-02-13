@@ -1,13 +1,10 @@
 require "./spec_helper"
 
-# NOTE: OpenAPI document validation tests are skipped because they require
-# remote resource resolution for OpenAPI meta schemas.
-# The schema retrieval and validation tests work correctly.
+# OpenAPI document validation tests use embedded meta-schemas.
 
 describe "OpenAPI" do
   describe "document validation" do
     it "validates a basic OpenAPI 3.1 document" do
-      # This test requires OpenAPI meta schema resources to be available
       document = JSON.parse(%q({
         "openapi": "3.1.0",
         "info": {
@@ -19,6 +16,30 @@ describe "OpenAPI" do
 
       openapi = JsonSchemer.openapi(document)
       openapi.valid?.should be_true
+    end
+
+    it "rejects OpenAPI 3.1 discriminator without propertyName" do
+      document = JSON.parse(%q({
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Test API",
+          "version": "1.0.0"
+        },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Pet": {
+              "type": "object",
+              "discriminator": {
+                "mapping": { "dog": "Dog" }
+              }
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      openapi.valid?.should be_false
     end
 
     it "raises for unsupported OpenAPI version" do
