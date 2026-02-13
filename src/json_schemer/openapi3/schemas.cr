@@ -99,7 +99,7 @@ module JsonSchemer
     class_getter entrypoint_by_dialect : Hash(String, URI) do
       {
         # 3.1 json schema dialects to schema-base mapping
-        "https://spec.openapis.org/oas/3.1/dialect/base" => URI.parse("https://spec.openapis.org/oas/3.1/schema-base/2022-10-07"),
+        "https://spec.openapis.org/oas/3.1/dialect/base"       => URI.parse("https://spec.openapis.org/oas/3.1/schema-base/2022-10-07"),
         "https://spec.openapis.org/oas/3.1/dialect/2024-10-25" => URI.parse("https://spec.openapis.org/oas/3.1/schema-base/2024-11-14"),
         "https://spec.openapis.org/oas/3.1/dialect/2024-11-10" => URI.parse("https://spec.openapis.org/oas/3.1/schema-base/2025-09-15"),
         # 3.2 json schema dialects to schema-base mapping

@@ -924,6 +924,93 @@ describe JsonSchemer do
       result["errors"].as_a.empty?.should be_false
     end
 
+    it "validates various invalid schema keywords across vocabularies" do
+      invalid_schemas = [
+        # Core
+        %q({"$id": 123}),
+        %q({"$schema": true}),
+        %q({"$ref": []}),
+        %q({"$anchor": 1}),
+        %q({"$dynamicRef": 123}),
+        %q({"$dynamicAnchor": 1}),
+        %q({"$defs": "invalid"}),
+        # Validation
+        %q({"type": "invalid"}),
+        %q({"type": ["string", "invalid"]}),
+        %q({"enum": "invalid"}),
+        %q({"multipleOf": "invalid"}),
+        %q({"multipleOf": 0}),
+        %q({"maximum": "invalid"}),
+        %q({"exclusiveMaximum": "invalid"}),
+        %q({"minimum": "invalid"}),
+        %q({"exclusiveMinimum": "invalid"}),
+        %q({"maxLength": -1}),
+        %q({"minLength": -1}),
+        %q({"pattern": 123}),
+        %q({"maxItems": -1}),
+        %q({"minItems": -1}),
+        %q({"uniqueItems": "invalid"}),
+        %q({"maxContains": -1}),
+        %q({"minContains": -1}),
+        %q({"maxProperties": -1}),
+        %q({"minProperties": -1}),
+        %q({"required": "invalid"}),
+        %q({"required": [123]}),
+        %q({"dependentRequired": {"a": "invalid"}}),
+        # Applicator
+        %q({"prefixItems": "invalid"}),
+        %q({"items": 123}),
+        %q({"contains": 123}),
+        %q({"additionalProperties": 123}),
+        %q({"properties": "invalid"}),
+        %q({"patternProperties": "invalid"}),
+        %q({"dependentSchemas": "invalid"}),
+        %q({"propertyNames": 123}),
+        %q({"if": 123}),
+        %q({"then": 123}),
+        %q({"else": 123}),
+        %q({"allOf": "invalid"}),
+        %q({"anyOf": "invalid"}),
+        %q({"oneOf": "invalid"}),
+        %q({"not": 123}),
+        # Unevaluated
+        %q({"unevaluatedItems": 123}),
+        %q({"unevaluatedProperties": 123}),
+        # Format
+        %q({"format": 123}),
+        # Content
+        %q({"contentEncoding": 123}),
+        %q({"contentMediaType": 123}),
+        %q({"contentSchema": 123}),
+        # Metadata
+        %q({"title": 123}),
+        %q({"description": 123}),
+        %q({"deprecated": "invalid"}),
+        %q({"readOnly": "invalid"}),
+        %q({"writeOnly": "invalid"}),
+        %q({"examples": "invalid"}),
+        # Nested
+        %q({"properties": {"foo": {"type": "invalid"}}}),
+        %q({"allOf": [{"type": "string"}, {"minLength": "invalid"}]}),
+        %q({"items": {"properties": {"bar": {"maximum": "invalid"}}}}),
+        %q({"dependentSchemas": {"baz": {"required": true}}}),
+      ]
+
+      invalid_schemas.each do |schema_json|
+        schema = JSON.parse(schema_json).as_h
+        JsonSchemer.valid_schema?(schema).should be_false, "Schema should be invalid: #{schema_json}"
+
+        result = JsonSchemer.validate_schema(schema)
+        result["valid"].as_bool.should be_false
+        errors = result["errors"].as_a
+        errors.should_not be_empty
+
+        # Verify error message contains the JSON pointer (similar to OpenAPI spec test)
+        error_message = errors.last.as_h["error"].as_s
+        error_message.should match(/at `\/.*`/)
+      end
+    end
+
     it "validates schema with specific meta_schema" do
       schema = {"type" => JSON::Any.new("string")}
       JsonSchemer.valid_schema?(schema, meta_schema: JsonSchemer.draft202012).should be_true

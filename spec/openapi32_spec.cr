@@ -333,6 +333,5 @@ describe "OpenAPI 3.2" do
       openapi = JsonSchemer.openapi(document)
       openapi.valid?.should be_true
     end
-
   end
 end
