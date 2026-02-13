@@ -16,6 +16,30 @@ describe "OpenAPI 3.2" do
       openapi.valid?.should be_true
     end
 
+    it "allows OpenAPI 3.2 discriminator without propertyName" do
+      document = JSON.parse(%q({
+        "openapi": "3.2.0",
+        "info": {
+          "title": "Test API",
+          "version": "1.0.0"
+        },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Pet": {
+              "type": "object",
+              "discriminator": {
+                "mapping": { "dog": "Dog" }
+              }
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      openapi.valid?.should be_true
+    end
+
     it "raises for unsupported OpenAPI version" do
       document = JSON.parse(%q({
         "openapi": "2.0.0",

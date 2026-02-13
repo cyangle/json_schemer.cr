@@ -175,19 +175,43 @@ This is more powerful than the simple proc-based `keywords` option as it allows 
 ```crystal
 class MoneyKeyword < JsonSchemer::Keyword
   def validate(instance, instance_location, keyword_location, context)
-    return nil unless instance.raw.is_a?(String)
-
-    # Check if string is a valid money amount
-    if instance.as_s.matches?(/\A\d+\.\d{2}\z/)
-      nil
-    else
-      result(instance, instance_location, keyword_location, false)
-    end
+    # ... validation logic ...
+    nil
   end
 end
 
-# Register before creating schema
-JsonSchemer::VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/validation"]["money"] = MoneyKeyword
+# 1. Register keyword in a custom vocabulary
+JsonSchemer::VOCABULARIES["https://example.com/vocab/money"] = {
+  "money" => MoneyKeyword.as(JsonSchemer::Keyword.class)
+}
+JsonSchemer::VOCABULARY_ORDER["https://example.com/vocab/money"] = 100
+
+# 2. Define a meta-schema using this vocabulary
+meta_schema = {
+  "$id" => "https://example.com/meta",
+  "$schema" => "https://json-schema.org/draft/2020-12/schema",
+  "$vocabulary" => {
+    "https://json-schema.org/draft/2020-12/vocab/core" => true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator" => true,
+    "https://json-schema.org/draft/2020-12/vocab/validation" => true,
+    "https://json-schema.org/draft/2020-12/vocab/meta-data" => true,
+    "https://json-schema.org/draft/2020-12/vocab/format-annotation" => true,
+    "https://json-schema.org/draft/2020-12/vocab/content" => true,
+    "https://json-schema.org/draft/2020-12/vocab/unevaluated" => true,
+    "https://example.com/vocab/money" => true
+  }
+}
+
+# 3. Use the meta-schema in your schema
+schema = JsonSchemer.schema(
+  %q({
+    "$schema": "https://example.com/meta",
+    "money": "100.00"
+  }),
+  ref_resolver: ->(uri : URI) {
+    uri.to_s == "https://example.com/meta" ? meta_schema : nil
+  }
+)
 ```
 
 See [USAGE.md](USAGE.md#class-based-custom-keywords) for a complete example including parsing configuration options.
@@ -333,6 +357,9 @@ schema = JsonSchemer.schema(
 #### `ref_resolver`
 
 Resolves external `$ref` URIs to schema documents. Built-in resolvers are available:
+
+> [!NOTE]
+> **Standard Meta-Schemas:** You do not need to resolve standard JSON Schema meta-schemas (e.g., `https://json-schema.org/draft/2020-12/schema`) or OpenAPI dialect schemas in your custom resolver. The library automatically falls back to built-in definitions if your resolver returns `nil`.
 
 ```crystal
 # Default: raises UnknownRef for any external reference
