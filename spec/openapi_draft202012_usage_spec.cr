@@ -62,7 +62,7 @@ describe "OpenAPI3 Draft202012 Meta Schemas Usage" do
       # JSON Schema Draft 2020-12 keywords
 
       document = JSON.parse(%q({
-        "openapi": "3.1.0",
+        "openapi": "3.2.0",
         "info": {
           "title": "Test API",
           "version": "1.0.0"
@@ -104,6 +104,164 @@ describe "OpenAPI3 Draft202012 Meta Schemas Usage" do
         "id": 42
       }))
       test_schema.valid?(invalid).should be_false
+    end
+
+    it "validates OpenAPI document with invalid schema keywords" do
+      # Test various invalid schema keyword values that should be caught by Draft 2020-12 meta-schemas
+      invalid_schemas = [
+        %q({"$defs": "invalid"}),                       # Core
+        %q({"properties": "invalid"}),                  # Applicator
+        %q({"format": {}}),                             # Format
+        %q({"readOnly": "bad"}),                        # Metadata
+        %q({"minimum": "not a number"}),                # Validation
+        %q({"required": true}),                         # Validation
+        %q({"properties": ["not", "a", "hash"]}),       # Applicator
+        %q({"multipleOf": "not a number"}),             # Validation
+        %q({"pattern": 123}),                           # Validation
+        %q({"prefixItems": {"not": "an array"}}),       # Applicator
+        %q({"uniqueItems": "not a boolean"}),           # Validation
+        %q({"dependentSchemas": ["not", "a", "hash"]}), # Applicator
+      ]
+
+      invalid_schemas.each do |schema_json|
+        document_json = %Q({
+          "openapi": "3.2.0",
+          "info": {
+            "title": "Invalid Schema Test",
+            "version": "1.0.0"
+          },
+          "paths": {},
+          "components": {
+            "schemas": {
+              "InvalidSchema": #{schema_json}
+            }
+          }
+        })
+
+        json_doc = JSON.parse(document_json).as_h
+
+        openapi = JsonSchemer.openapi(json_doc)
+        result = openapi.validate
+        error_message = result["errors"].as_a.last.as_h["error"].as_s
+        error_message.should match(/value at \`\/components\/schemas\/InvalidSchema\/.*\` is not .*/)
+        result["valid"].as_bool.should be_false, "OpenAPI document should be invalid with schema: #{schema_json}"
+      end
+    end
+
+    it "validates OpenAPI document using unevaluatedProperties with invalid value" do
+      document = JSON.parse(%q({
+        "openapi": "3.1.0",
+        "info": { "title": "Test", "version": "1.0.0" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Invalid": {
+              "type": "object",
+              "unevaluatedProperties": "not-a-boolean-or-schema"
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      openapi.valid?.should be_false
+    end
+
+    it "validates OpenAPI document using contains with invalid minContains" do
+      document = JSON.parse(%q({
+        "openapi": "3.2.0",
+        "info": { "title": "Test", "version": "1.0.0" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Invalid": {
+              "type": "array",
+              "contains": { "type": "string" },
+              "minContains": "not-a-number"
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      openapi.valid?.should be_false
+    end
+
+    it "validates complex nested schemas with invalid values" do
+      # Test that validation works deep inside the OpenAPI document
+      document = JSON.parse(%q({
+        "openapi": "3.1.0",
+        "info": { "title": "Test", "version": "1.0.0" },
+        "paths": {
+          "/test": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "OK",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "data": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": "invalid-length"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      openapi.valid?.should be_false
+    end
+
+    it "validates instances against Draft 2020-12 keywords in OpenAPI document" do
+      document = JSON.parse(%q({
+        "openapi": "3.1.0",
+        "info": { "title": "Test", "version": "1.0.0" },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Tuple": {
+              "type": "array",
+              "prefixItems": [
+                { "type": "string" },
+                { "type": "number" }
+              ],
+              "items": false
+            },
+            "StrictObject": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" }
+              },
+              "unevaluatedProperties": false
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      openapi.valid?.should be_true
+
+      tuple_schema = openapi.schema("Tuple")
+      tuple_schema.valid?(JSON.parse(%q(["hello", 42]))).should be_true
+      tuple_schema.valid?(JSON.parse(%q(["hello", "world"]))).should be_false     # Wrong type for 2nd item
+      tuple_schema.valid?(JSON.parse(%q(["hello", 42, "extra"]))).should be_false # extra item not allowed by items: false
+
+      strict_schema = openapi.schema("StrictObject")
+      strict_schema.valid?(JSON.parse(%q({"name": "John"}))).should be_true
+      strict_schema.valid?(JSON.parse(%q({"name": "John", "age": 30}))).should be_false # age is unevaluated
     end
 
     it "validates schema using allOf which requires applicator meta-schema" do

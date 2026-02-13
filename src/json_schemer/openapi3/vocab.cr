@@ -5,7 +5,7 @@ module JsonSchemer
         "allOf"         => Base::AllOf,
         "anyOf"         => Base::AnyOf,
         "oneOf"         => Base::OneOf,
-        "discriminator" => Base::Discriminator
+        "discriminator" => Base::Discriminator,
       } of String => Keyword.class
     end
   end
