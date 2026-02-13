@@ -21,7 +21,7 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(grep "^version:" shard.yml | awk '{print $2}')
+          VERSION=$(grep "^version:" shard.yml | awk '{print $2}' | tr -d '"' | tr -d "'")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Check if tag exists
