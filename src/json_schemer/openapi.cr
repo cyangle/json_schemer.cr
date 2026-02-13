@@ -106,24 +106,22 @@ module JsonSchemer
     # user_schema = openapi.ref("#/components/schemas/User")
     # ```
     def ref(value : String) : Schema
-      begin
-        @schema.ref(value)
-      rescue e : InvalidRefPointer
-        if value.starts_with?("#/")
-          path = value[1..]
-          begin
-            target = Hana::Pointer.new(path).eval(JSON::Any.new(@document.transform_values { |v| v }))
-            Schema.new(
-              target,
-              root: @schema,
-              configuration: @schema.configuration
-            )
-          rescue
-            raise e
-          end
-        else
+      @schema.ref(value)
+    rescue e : InvalidRefPointer
+      if value.starts_with?("#/")
+        path = value[1..]
+        begin
+          target = Hana::Pointer.new(path).eval(JSON::Any.new(@document.transform_values { |v| v }))
+          Schema.new(
+            target,
+            root: @schema,
+            configuration: @schema.configuration
+          )
+        rescue
           raise e
         end
+      else
+        raise e
       end
     end
 
