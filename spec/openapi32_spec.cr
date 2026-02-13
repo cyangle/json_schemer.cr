@@ -296,6 +296,130 @@ describe "OpenAPI 3.2" do
       }))
       pet_schema.valid?(invalid).should be_false
     end
+
+    it "uses defaultMapping fallback when no mapping matches" do
+      document = JSON.parse(%q({
+        "openapi": "3.2.0",
+        "info": {
+          "title": "Pet API",
+          "version": "1.0.0"
+        },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Pet": {
+              "type": "object",
+              "discriminator": {
+                "propertyName": "petType",
+                "mapping": {
+                  "cat": "Cat"
+                },
+                "defaultMapping": "DefaultPet"
+              },
+              "properties": {
+                "petType": {"type": "string"}
+              },
+              "required": ["petType"]
+            },
+            "Cat": {
+              "allOf": [
+                {"$ref": "#/components/schemas/Pet"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "meow": {"type": "boolean"}
+                  },
+                  "required": ["meow"]
+                }
+              ]
+            },
+            "DefaultPet": {
+              "allOf": [
+                {"$ref": "#/components/schemas/Pet"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "note": {"type": "string"}
+                  },
+                  "required": ["note"]
+                }
+              ]
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      pet_schema = openapi.schema("Pet")
+
+      # Case 1: Matches explicit mapping
+      cat = JSON.parse(%q({
+        "petType": "cat",
+        "meow": true
+      }))
+      pet_schema.valid?(cat).should be_true
+
+      # Case 2: Does not match mapping, falls back to defaultMapping
+      generic = JSON.parse(%q({
+        "petType": "unknown_type",
+        "note": "Generic pet"
+      }))
+      pet_schema.valid?(generic).should be_true
+
+      # Case 3: Falls back to defaultMapping, but invalid against that schema
+      invalid_generic = JSON.parse(%q({
+        "petType": "unknown_type",
+        "meow": true
+      }))
+      pet_schema.valid?(invalid_generic).should be_false
+    end
+
+    it "uses defaultMapping with explicit reference format" do
+      document = JSON.parse(%q({
+        "openapi": "3.2.0",
+        "info": {
+          "title": "Pet API",
+          "version": "1.0.0"
+        },
+        "paths": {},
+        "components": {
+          "schemas": {
+            "Pet": {
+              "type": "object",
+              "discriminator": {
+                "propertyName": "petType",
+                "defaultMapping": "#/components/schemas/DefaultPet"
+              },
+              "properties": {
+                "petType": {"type": "string"}
+              },
+              "required": ["petType"]
+            },
+            "DefaultPet": {
+              "allOf": [
+                {"$ref": "#/components/schemas/Pet"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "note": {"type": "string"}
+                  },
+                  "required": ["note"]
+                }
+              ]
+            }
+          }
+        }
+      })).as_h
+
+      openapi = JsonSchemer.openapi(document)
+      pet_schema = openapi.schema("Pet")
+
+      generic = JSON.parse(%q({
+        "petType": "unknown_type",
+        "note": "Generic pet"
+      }))
+      pet_schema.valid?(generic).should be_true
+    end
   end
 
   describe "OpenAPI 3.1 backward compatibility" do
