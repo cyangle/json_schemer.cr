@@ -85,10 +85,9 @@ src/
       vocab/
         base.cr                # OpenAPI 3.x base vocabulary keywords
       vocab.cr                 # OpenAPI vocabulary registration
-      meta.cr                  # OpenAPI meta schema definitions
-      document.cr              # OpenAPI document validation
-      openapi_3_1_schema.json  # OpenAPI 3.1 meta-schema
-      openapi_3_2_schema.json  # OpenAPI 3.2 meta-schema
+      meta.cr                  # OpenAPI meta schema definitions (compat)
+      document.cr              # OpenAPI document validation helpers
+      schemas.cr               # Embedded OpenAPI 3.1/3.2 schemas
     openapi.cr                 # OpenAPI document handler
 spec/
   spec_helper.cr               # Shared test setup

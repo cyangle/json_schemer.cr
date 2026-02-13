@@ -358,6 +358,9 @@ external_schemas = {
 schema = JsonSchemer.schema(
   %q({"$ref": "http://example.com/user.json"}),
   ref_resolver: ->(uri : URI) {
+    # Custom resolution logic
+    # Note: If this returns nil, the library will attempt to resolve standard
+    # meta-schemas (e.g. Draft 2020-12) from its internal registry.
     external_schemas[uri.to_s]?
   }
 )
@@ -568,10 +571,18 @@ schema.valid?(JSON::Any.new(150_i64))  # => false
 ### Class-Based Custom Keywords
 
 For more complex validation logic, you can define a custom keyword class by inheriting from `JsonSchemer::Keyword`.
-You must register the keyword class in `JsonSchemer::VOCABULARIES` before creating your schema.
+This approach requires defining a custom vocabulary and meta-schema.
+
+1. Define the keyword class inheriting from `JsonSchemer::Keyword`.
+2. Register the keyword in `JsonSchemer::VOCABULARIES` with a custom URI.
+3. Set the vocabulary order in `JsonSchemer::VOCABULARY_ORDER`.
+4. Define a meta-schema that includes your custom vocabulary in `$vocabulary`.
+5. Use this meta-schema in your schema (via `$schema`).
 
 ```crystal
-# Define the custom keyword class
+require "big"
+
+# 1. Define the custom keyword class
 class MoneyKeyword < JsonSchemer::Keyword
   @min : BigDecimal
   @max : BigDecimal
@@ -642,7 +653,7 @@ class MoneyKeyword < JsonSchemer::Keyword
     amount = BigDecimal.new(val_str)
 
     if amount < @min
-      return result(instance, instance_location, location, false, 
+      return result(instance, instance_location, location, false,
         details: {"error" => JSON::Any.new("amount must be >= #{@min}")}
       )
     end
@@ -665,35 +676,55 @@ class MoneyKeyword < JsonSchemer::Keyword
   end
 end
 
-# Register the keyword in a vocabulary (e.g. 'validation')
-# This should be done at application startup
-JsonSchemer::VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/validation"]["money"] = MoneyKeyword
+# 2. Register the keyword in a custom vocabulary
+JsonSchemer::VOCABULARIES["https://example.com/vocab/money"] = {
+  "money" => MoneyKeyword.as(JsonSchemer::Keyword.class)
+}
+# Set vocabulary processing order (higher runs later)
+JsonSchemer::VOCABULARY_ORDER["https://example.com/vocab/money"] = 100
 
-# Create schema using the custom keyword with constraints
-# Note: Explicitly including $vocabulary ensures the modified vocabulary is used
-schema = JsonSchemer.schema(%q({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$vocabulary": {
-    "https://json-schema.org/draft/2020-12/vocab/core": true,
-    "https://json-schema.org/draft/2020-12/vocab/applicator": true,
-    "https://json-schema.org/draft/2020-12/vocab/validation": true,
-    "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
-    "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
-    "https://json-schema.org/draft/2020-12/vocab/content": true,
-    "https://json-schema.org/draft/2020-12/vocab/unevaluated": true
-  },
+# 3. Define a meta-schema
+meta_schema = {
+  "$id" => "https://example.com/meta",
+  "$schema" => "https://json-schema.org/draft/2020-12/schema",
+  "$vocabulary" => {
+    "https://json-schema.org/draft/2020-12/vocab/core" => true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator" => true,
+    "https://json-schema.org/draft/2020-12/vocab/validation" => true,
+    "https://json-schema.org/draft/2020-12/vocab/meta-data" => true,
+    "https://json-schema.org/draft/2020-12/vocab/format-annotation" => true,
+    "https://json-schema.org/draft/2020-12/vocab/content" => true,
+    "https://json-schema.org/draft/2020-12/vocab/unevaluated" => true,
+    "https://example.com/vocab/money" => true
+  }
+}
+
+# 4. Use the meta-schema
+schema_json = %q({
+  "$schema": "https://example.com/meta",
   "type": "string",
   "money": {
     "minimum": "10.00",
     "maximum": "100.00"
   }
-}))
+})
+
+# Provide the meta-schema via ref_resolver (unless hosted externally)
+# Note: You don't need to handle standard meta-schemas; the library falls back to built-ins automatically.
+resolver = ->(uri : URI) {
+  if uri.to_s == "https://example.com/meta"
+    JSON.parse(meta_schema.to_json).as_h
+  else
+    nil
+  end
+}
+
+schema = JsonSchemer.schema(schema_json, ref_resolver: resolver)
 
 schema.valid?(JSON::Any.new("12.34")) # => true
-schema.valid?(JSON::Any.new("12"))    # => false (invalid format)
-schema.valid?(JSON::Any.new("5.00"))  # => false (below minimum)
-schema.valid?(JSON::Any.new("150.00")) # => false (above maximum)
+schema.valid?(JSON::Any.new("5.00"))  # => false
 ```
+
 
 ## Custom Error Messages
 
@@ -796,11 +827,13 @@ result = JsonSchemer.validate_schema({"type" => JSON::Any.new("invalid")})
 puts result["errors"]
 ```
 
-## OpenAPI 3.1 Support
+## OpenAPI 3.1 and 3.2 Support
+
+This library supports both OpenAPI 3.1 and 3.2.
 
 ```crystal
 document = JSON.parse(%q({
-  "openapi": "3.1.0",
+  "openapi": "3.2.0",
   "info": {"title": "My API", "version": "1.0.0"},
   "paths": {},
   "components": {
@@ -817,7 +850,7 @@ document = JSON.parse(%q({
   }
 })).as_h
 
-# Create OpenAPI document handler
+# Create OpenAPI document handler (automatically detects version)
 openapi = JsonSchemer.openapi(document)
 
 # Validate the document itself
@@ -828,6 +861,16 @@ user_schema = openapi.schema("User")
 user_schema.valid?(JSON.parse(%q({"name": "John"})))  # => true
 user_schema.valid?(JSON.parse(%q({"age": 30})))       # => false (missing name)
 ```
+
+### Discriminator Differences
+
+OpenAPI 3.1 and 3.2 handle the `discriminator` keyword slightly differently:
+
+- **OpenAPI 3.1**: The `propertyName` field is **required** in the discriminator object.
+- **OpenAPI 3.2**: The `propertyName` field is **optional**. If omitted, the discriminator validation is skipped (but `mapping` and `defaultMapping` may still be used by tools).
+
+The library automatically applies the correct validation rules based on the `openapi` version string in your document.
+
 
 ## Access Mode (readOnly/writeOnly)
 
