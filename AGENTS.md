@@ -1,7 +1,7 @@
 # AGENTS.md - Agent Guidelines for json_schemer.cr
 
 This is a Crystal port of the Ruby [json_schemer](https://github.com/davishmcclurg/json_schemer) library.
-It implements JSON Schema validation according to Draft 2020-12 and OpenAPI 3.1 specifications.
+It implements JSON Schema validation according to Draft 2020-12 and OpenAPI 3.1/3.2 specifications.
 
 ## Build & Test Commands
 
@@ -33,6 +33,9 @@ crystal spec --fail-fast
 # Run linter
 ./bin/ameba
 
+# Run linter with auto-fix
+./bin/ameba --fix
+
 # Type-check without running (faster feedback)
 crystal build --no-codegen src/json_schemer.cr
 
@@ -55,33 +58,36 @@ src/
     result.cr                  # Validation result structure
     output.cr                  # Output formatting module
     errors.cr                  # Error classes hierarchy
-    constants.cr               # Shared constants (URIs, etc.)
     configuration.cr           # Configuration options
     format.cr                  # Format validators (email, uri, etc.)
+    format/
+      dns_hostname.cr          # DNS hostname validator with DNS resolution
     content.cr                 # Content encoding/media type validators
     ecma_regexp.cr             # ECMA-262 regexp compatibility
     resources.cr               # Schema resource management
     location.cr                # JSON pointer location handling
     cached_resolver.cr         # Cached ref/regexp resolvers
+    lru_cache.cr               # LRU cache implementation
+    dns_resolver.cr            # DNS resolution utilities
     draft202012/
       vocab/                   # Vocabulary implementations
-        core.cr                # $schema, $id, $ref, $anchor, $defs
-        validation.cr          # type, enum, const, min/max, etc.
-        applicator.cr          # allOf, anyOf, oneOf, if/then/else
+        core.cr                # $schema, $id, $ref, $anchor, $dynamicRef, $defs
+        validation.cr          # type, enum, const, min/max, multipleOf, pattern, etc.
+        applicator.cr          # allOf, anyOf, oneOf, not, if/then/else
         unevaluated.cr         # unevaluatedItems, unevaluatedProperties
         format_annotation.cr   # Format as annotation (default)
         format_assertion.cr    # Format as assertion
-        content.cr             # contentEncoding, contentMediaType
-        meta_data.cr           # title, description, default, etc.
+        content.cr             # contentEncoding, contentMediaType, contentSchema
+        meta_data.cr           # title, description, default, deprecated, readOnly, writeOnly
       vocab.cr                 # Vocabulary registration
       meta.cr                  # Meta schema definitions
-    openapi31/                 # OpenAPI 3.1 support
+    openapi3/                  # OpenAPI 3.1 and 3.2 support
       vocab/
-        base.cr                # OpenAPI 3.1 base vocabulary keywords
+        base.cr                # OpenAPI 3.x base vocabulary keywords
       vocab.cr                 # OpenAPI vocabulary registration
-      meta.cr                  # OpenAPI meta schema definitions
-      schema.json              # OpenAPI 3.1 meta-schema
-      document.cr              # OpenAPI document validation
+      meta.cr                  # OpenAPI meta schema definitions (compat)
+      document.cr              # OpenAPI document validation helpers
+      schemas.cr               # Embedded OpenAPI 3.1/3.2 schemas
     openapi.cr                 # OpenAPI document handler
 spec/
   spec_helper.cr               # Shared test setup
@@ -91,10 +97,17 @@ spec/
   hooks_spec.cr                # Validation hooks tests
   options_spec.cr              # Configuration options tests
   x_error_spec.cr              # Custom error message (x-error) tests
-  openapi_spec.cr              # OpenAPI validation tests
+  openapi_spec.cr              # OpenAPI 3.1 validation tests
+  openapi32_spec.cr            # OpenAPI 3.2 validation tests
   pointers_spec.cr             # JSON pointer tests
   regex_spec.cr                # Regex pattern tests
   output_format_spec.cr        # Output format tests
+  dns_resolver_spec.cr         # DNS resolution tests
+  dns_resolver_timeout_spec.cr # DNS resolution timeout tests
+  schema_mutation_spec.cr      # Schema mutation tests
+  custom_keyword_class_spec.cr # Custom keyword class tests
+  custom_keyword_location_spec.cr # Custom keyword location tests
+  memory_leak_spec.cr          # Memory leak detection tests
   json_schema_test_suite_spec.cr  # JSON Schema Test Suite integration
 ```
 
@@ -108,7 +121,7 @@ spec/
 - Use `crystal tool format` to auto-format
 
 ### Imports/Requires
-- Standard library requires first (`json`, `uri`, `big`, `socket`, `http/client`, `base64`)
+- Standard library requires first (`json`, `uri`, `big`, `socket`, `http/client`, `base64`, `log`)
 - External dependencies second (`hana`, `simpleidn`)
 - Internal requires in dependency order
 - Group requires logically (see `src/json_schemer.cr`)
@@ -120,9 +133,12 @@ require "big"
 require "socket"
 require "http/client"
 require "base64"
+require "log"
 
 require "hana"
-require "simpleidn"
+{% if flag?(:with_simpleidn) %}
+  require "simpleidn"
+{% end %}
 
 require "./json_schemer/version"
 require "./json_schemer/errors"
@@ -280,7 +296,7 @@ end
   - Requires `libicu`.
   - Compile with `-Dwith_simpleidn` to enable strict IDN validation.
   - Without it, naive regex validation is used for `hostname`/`email` and `idn-*` formats are skipped.
-- Crystal >= 1.18.2
+- Crystal >= 1.19.0
 
 ## Feature: Custom Error Messages (x-error)
 The `x-error` keyword allows customizing validation error messages.
@@ -377,5 +393,5 @@ git submodule update --remote JSON-Schema-Test-Suite
 5. **Lazy initialization**: Use `@field ||= ...` pattern for cached values
 6. **Draft 2020-12 default**: Format validation is annotation-only by default
 7. **ECMA regexp**: Use `regexp_resolver: "ecma"` for JavaScript-compatible patterns
-8. **OpenAPI 3.1 support**: Use `JsonSchemer.openapi(document)` for OpenAPI document validation
+8. **OpenAPI 3.1/3.2 support**: Use `JsonSchemer.openapi(document)` for OpenAPI document validation
 9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.

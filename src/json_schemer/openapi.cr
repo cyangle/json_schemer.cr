@@ -29,9 +29,12 @@ module JsonSchemer
 
       version = document["openapi"]?.try(&.as_s)
       case version
-      when /\A3\.1\.\d+\z/
-        @document_schema = JsonSchemer.openapi31_document
-        resolved_meta_schema = document["jsonSchemaDialect"]?.try(&.as_s) || OpenAPI31::BASE_URI.to_s
+      when /\A3\.[12]\.\d+\z/
+        # Use the cached document schema based on entrypoint
+        # The schema-base files have const values for jsonSchemaDialect
+        entrypoint_uri = OpenAPI3.select_entrypoint(document)
+        @document_schema = OpenAPI3.document_schema(entrypoint_uri)
+        resolved_meta_schema = resolve_meta_schema(document, version)
       else
         raise UnsupportedOpenAPIVersion.new(version.to_s)
       end
@@ -56,6 +59,18 @@ module JsonSchemer
         resolve_enumerators: resolve_enumerators,
         access_mode: access_mode
       )
+    end
+
+    # Resolves the meta-schema URI for the given OpenAPI document.
+    # Returns the jsonSchemaDialect if explicitly set, otherwise
+    # selects the appropriate dialect based on the OpenAPI version.
+    private def resolve_meta_schema(document : JSONHash, version : String?) : String
+      # Use explicitly specified dialect if provided (takes precedence)
+      dialect = document["jsonSchemaDialect"]?.try(&.as_s)
+      return dialect if dialect
+
+      # Default dialect based on version
+      OpenAPI3.select_dialect_schema(version).to_s
     end
 
     # Checks if the OpenAPI document itself is valid against the OpenAPI specification.
@@ -92,6 +107,22 @@ module JsonSchemer
     # ```
     def ref(value : String) : Schema
       @schema.ref(value)
+    rescue e : InvalidRefPointer
+      if value.starts_with?("#/")
+        path = value[1..]
+        begin
+          target = Hana::Pointer.new(path).eval(JSON::Any.new(@document.transform_values { |v| v }))
+          Schema.new(
+            target,
+            root: @schema,
+            configuration: @schema.configuration
+          )
+        rescue
+          raise e
+        end
+      else
+        raise e
+      end
     end
 
     # Retrieves a schema definition from `#/components/schemas`.
