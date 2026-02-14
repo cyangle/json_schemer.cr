@@ -9,7 +9,7 @@ module JsonSchemer
     module Meta
       # Schema resolver that delegates to OpenAPI3.schemas
       SCHEMAS_RESOLVER = ->(uri : URI) : JSONHash? {
-        OpenAPI3.schemas[uri]?
+        OpenAPI3.resolve_schema(uri)
       }
     end
   end

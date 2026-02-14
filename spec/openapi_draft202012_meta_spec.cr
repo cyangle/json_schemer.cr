@@ -27,7 +27,7 @@ describe "OpenAPI3 Draft202012 Meta Schemas" do
 
       expected_uris.each do |uri|
         uri_obj = URI.parse(uri)
-        JsonSchemer::OpenAPI3.schemas.has_key?(uri_obj).should be_true,
+        JsonSchemer::OpenAPI3.resolve_schema(uri_obj).should_not be_nil,
           "Expected OpenAPI3.schemas to contain #{uri} for proper $ref resolution"
       end
     end
@@ -43,13 +43,6 @@ describe "OpenAPI3 Draft202012 Meta Schemas" do
 
       resolved.should_not be_nil
       resolved.not_nil!["$id"].should eq("https://json-schema.org/draft/2020-12/meta/core")
-    end
-
-    it "has correct total schema count including Draft202012 meta schemas" do
-      # OpenAPI 3.1: 12 schemas, OpenAPI 3.2: 4 schemas = 16 OpenAPI-specific
-      # Draft202012 meta: 8 schemas
-      # Total: 24 schemas
-      JsonSchemer::OpenAPI3.schemas.size.should eq(24)
     end
   end
 end

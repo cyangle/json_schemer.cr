@@ -22,7 +22,7 @@ describe "OpenAPI3 Draft202012 Meta Schemas Usage" do
       # when the OpenAPI dialect is used as the meta-schema
       schema = JsonSchemer.schema(
         simple_schema,
-        meta_schema: JsonSchemer.openapi31
+        meta_schema: JsonSchemer.openapi31_dialect_2024_11_10
       )
 
       # Validation should work without errors
