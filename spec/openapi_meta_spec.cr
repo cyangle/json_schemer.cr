@@ -23,7 +23,7 @@ describe "OpenAPI Meta Schema Loading" do
 
   it "fully loads OpenAPI 3.2 dialect schema with all Draft 2020-12 vocabularies" do
     dialect_uri = URI.parse("https://spec.openapis.org/oas/3.2/dialect/2025-09-17")
-    dialect_schema_hash = JsonSchemer::OpenAPI3.schemas[dialect_uri]?
+    dialect_schema_hash = JsonSchemer::OpenAPI3.resolve_schema(dialect_uri)
     dialect_schema_hash.should_not be_nil
 
     dialect_schema = JsonSchemer.schema(
@@ -43,7 +43,7 @@ describe "OpenAPI Meta Schema Loading" do
     dialect_uri = URI.parse("https://spec.openapis.org/oas/3.2/dialect/2025-09-17")
 
     dialect_schema = JsonSchemer.schema(
-      JsonSchemer::OpenAPI3.schemas[dialect_uri].not_nil!,
+      JsonSchemer::OpenAPI3.resolve_schema(dialect_uri).not_nil!,
       ref_resolver: JsonSchemer::OpenAPI3::SCHEMAS_RESOLVER
     )
 
