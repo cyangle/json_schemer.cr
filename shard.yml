@@ -1,5 +1,5 @@
 name: json_schemer
-version: 0.8.0
+version: 0.8.1
 
 authors:
   - Chao Yang <cyang05@outlook.com>
@@ -13,7 +13,7 @@ targets:
 dependencies:
   hana:
     github: cyangle/hana.cr
-    version: '>= 0.1.0'
+    version: '>= 0.1.1'
   simpleidn:
     github: cyangle/simpleidn.cr
     version: '>= 0.8.0'
