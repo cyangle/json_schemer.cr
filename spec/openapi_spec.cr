@@ -385,7 +385,7 @@ describe "OpenAPI" do
         }
       })).as_h
 
-      schemer = JsonSchemer.schema(schema_hash, meta_schema: JsonSchemer.openapi31)
+      schemer = JsonSchemer.schema(schema_hash, meta_schema: JsonSchemer.openapi31_dialect_2024_11_10)
 
       max_int32 = 2147483647
       max_int64 = 9223372036854775807_i64

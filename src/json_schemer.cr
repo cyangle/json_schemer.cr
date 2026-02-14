@@ -37,8 +37,6 @@ require "./json_schemer/openapi3/vocab/base"
 require "./json_schemer/openapi3/vocab"
 # Load OpenAPI schemas before other OpenAPI modules
 require "./json_schemer/openapi3/schemas"
-require "./json_schemer/openapi3/meta"
-require "./json_schemer/openapi3/document"
 require "./json_schemer/schema"
 require "./json_schemer/openapi"
 
@@ -231,10 +229,33 @@ module JsonSchemer
   end
 
   # Get OpenAPI 3.1 dialect schema (for validating schemas with $schema: https://spec.openapis.org/oas/3.1/dialect/...)
-  def self.openapi31 : Schema
-    @@openapi31 ||= Schema.new(
-      OpenAPI3.schemas[OpenAPI3::DIALECT_SCHEMA_3_1_URI],
-      base_uri: OpenAPI3::DIALECT_SCHEMA_3_1_URI,
+  # Get OpenAPI 3.1 dialect 2024-11-10 schema
+  def self.openapi31_dialect_2024_11_10 : Schema
+    @@openapi31_dialect_2024_11_10 ||= Schema.new(
+      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_2024_11_10_URI),
+      base_uri: OpenAPI3::OAS_3_1_DIALECT_2024_11_10_URI,
+      formats: OpenAPI3::FORMATS,
+      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+      regexp_resolver: "ecma"
+    )
+  end
+
+  # Get OpenAPI 3.1 dialect base schema
+  def self.openapi31_dialect_base : Schema
+    @@openapi31_dialect_base ||= Schema.new(
+      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_BASE_URI),
+      base_uri: OpenAPI3::OAS_3_1_DIALECT_BASE_URI,
+      formats: OpenAPI3::FORMATS,
+      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+      regexp_resolver: "ecma"
+    )
+  end
+
+  # Get OpenAPI 3.1 dialect 2024-10-25 schema
+  def self.openapi31_dialect_2024_10_25 : Schema
+    @@openapi31_dialect_2024_10_25 ||= Schema.new(
+      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_2024_10_25_URI),
+      base_uri: OpenAPI3::OAS_3_1_DIALECT_2024_10_25_URI,
       formats: OpenAPI3::FORMATS,
       ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
@@ -245,27 +266,19 @@ module JsonSchemer
   # Uses the appropriate schema-base based on jsonSchemaDialect or openapi version
   def self.openapi31_document : Schema
     @@openapi31_document ||= Schema.new(
-      OpenAPI3.schemas[OpenAPI3::ENTRYPOINT_SCHEMA_3_1_URI],
+      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_SCHEMA_BASE_2025_09_15_URI),
       ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
   end
 
   # Get OpenAPI 3.2 dialect schema
-  def self.openapi32 : Schema
-    @@openapi32 ||= Schema.new(
-      OpenAPI3.schemas[OpenAPI3::DIALECT_SCHEMA_3_2_URI],
-      base_uri: OpenAPI3::DIALECT_SCHEMA_3_2_URI,
+  # Get OpenAPI 3.2 dialect 2025-09-17 schema
+  def self.openapi32_dialect_2025_09_17 : Schema
+    @@openapi32_dialect_2025_09_17 ||= Schema.new(
+      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_2_DIALECT_2025_09_17_URI),
+      base_uri: OpenAPI3::OAS_3_2_DIALECT_2025_09_17_URI,
       formats: OpenAPI3::FORMATS,
-      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
-  end
-
-  # Get OpenAPI 3.x document schema (uses entrypoint selection based on document content)
-  def self.openapi3_document : Schema
-    @@openapi3_document ||= Schema.new(
-      OpenAPI3.schemas[OpenAPI3::ENTRYPOINT_SCHEMA_3_2_URI],
       ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
       regexp_resolver: "ecma"
     )
@@ -273,7 +286,16 @@ module JsonSchemer
 
   # Get OpenAPI 3.2 document schema (alias for openapi3_document)
   def self.openapi32_document : Schema
-    openapi3_document
+    @@openapi32_document ||= Schema.new(
+      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_2_SCHEMA_BASE_2025_09_17_URI),
+      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+      regexp_resolver: "ecma"
+    )
+  end
+
+  # Get OpenAPI 3.x document schema (uses entrypoint selection based on document content)
+  def self.openapi3_document : Schema
+    openapi32_document
   end
 
   # Creates an `OpenAPI` handler for the given OpenAPI document.
@@ -386,9 +408,10 @@ module JsonSchemer
 
     # Register meta schemas for quick lookup
     META_SCHEMA_CALLABLES_BY_BASE_URI_STR[Draft202012::ID] = -> { draft202012 }
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR["https://spec.openapis.org/oas/3.1/dialect/2024-10-25"] = -> { openapi31 }
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR["https://spec.openapis.org/oas/3.1/dialect/2024-11-10"] = -> { openapi31 }
-    META_SCHEMA_CALLABLES_BY_BASE_URI_STR["https://spec.openapis.org/oas/3.2/dialect/2025-09-17"] = -> { openapi32 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OpenAPI3::OAS_3_1_DIALECT_BASE_URI.to_s] = -> { openapi31_dialect_base }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OpenAPI3::OAS_3_1_DIALECT_2024_10_25_URI.to_s] = -> { openapi31_dialect_2024_10_25 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OpenAPI3::OAS_3_1_DIALECT_2024_11_10_URI.to_s] = -> { openapi31_dialect_2024_11_10 }
+    META_SCHEMA_CALLABLES_BY_BASE_URI_STR[OpenAPI3::OAS_3_2_DIALECT_2025_09_17_URI.to_s] = -> { openapi32_dialect_2025_09_17 }
   end
 
   # Meta schema lookup
