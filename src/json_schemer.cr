@@ -37,8 +37,6 @@ require "./json_schemer/openapi3/vocab/base"
 require "./json_schemer/openapi3/vocab"
 # Load OpenAPI schemas before other OpenAPI modules
 require "./json_schemer/openapi3/schemas"
-require "./json_schemer/openapi3/meta"
-require "./json_schemer/openapi3/document"
 require "./json_schemer/schema"
 require "./json_schemer/openapi"
 
