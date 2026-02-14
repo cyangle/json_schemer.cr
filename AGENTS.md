@@ -85,8 +85,6 @@ src/
       vocab/
         base.cr                # OpenAPI 3.x base vocabulary keywords
       vocab.cr                 # OpenAPI vocabulary registration
-      meta.cr                  # OpenAPI meta schema definitions (compat)
-      document.cr              # OpenAPI document validation helpers
       schemas.cr               # Embedded OpenAPI 3.1/3.2 schemas
     openapi.cr                 # OpenAPI document handler
 spec/
@@ -99,6 +97,9 @@ spec/
   x_error_spec.cr              # Custom error message (x-error) tests
   openapi_spec.cr              # OpenAPI 3.1 validation tests
   openapi32_spec.cr            # OpenAPI 3.2 validation tests
+  openapi_meta_spec.cr         # OpenAPI meta schema validation tests
+  openapi_draft202012_meta_spec.cr # Draft 2020-12 meta schema tests
+  openapi_draft202012_usage_spec.cr # Draft 2020-12 usage tests
   pointers_spec.cr             # JSON pointer tests
   regex_spec.cr                # Regex pattern tests
   output_format_spec.cr        # Output format tests
@@ -108,6 +109,7 @@ spec/
   custom_keyword_class_spec.cr # Custom keyword class tests
   custom_keyword_location_spec.cr # Custom keyword location tests
   memory_leak_spec.cr          # Memory leak detection tests
+  memory_profiling.cr          # Memory profiling tool
   json_schema_test_suite_spec.cr  # JSON Schema Test Suite integration
 ```
 
