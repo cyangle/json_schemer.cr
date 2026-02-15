@@ -236,7 +236,7 @@ This section provides a complete reference for all configuration options availab
 | `regexp_resolver` | `Proc(String, Regex?) \| String \| Nil` | `"ruby"` | Regex pattern resolver (`"ruby"` or `"ecma"`) |
 | `output_format` | `String?` | `"classic"` | Output format: `"flag"`, `"basic"`, or `"classic"` |
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
-| `insert_property_defaults` | `Bool \| Symbol` | `false` | Insert default values (annotation only) |
+| `insert_property_defaults` | `Bool` | `false` | Insert default values (annotation only) |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
 | `resolve_enumerators` | `Bool?` | `false` | Whether to resolve enumerators during validation |
 | `before_property_validation` | `Array(Proc)?` | `[]` | Hooks called before property validation |

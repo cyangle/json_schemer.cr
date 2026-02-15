@@ -66,7 +66,7 @@ module JsonSchemer
     property after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))
 
     # Whether to insert default values (not fully implemented).
-    property insert_property_defaults : Bool | Symbol
+    property insert_property_defaults : Bool
 
     # Resolver for property defaults.
     property property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)?
@@ -101,7 +101,7 @@ module JsonSchemer
       @keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)),
       @before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil)) = [] of Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil),
       @after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil)) = [] of Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil),
-      @insert_property_defaults : Bool | Symbol = false,
+      @insert_property_defaults : Bool = false,
       @property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       @ref_resolver : Proc(URI, JSONHash?) | String = DEFAULT_REF_RESOLVER,
       @regexp_resolver : Proc(String, Regex?) | String = "ruby",
@@ -123,7 +123,7 @@ module JsonSchemer
         keywords: options[:keywords]? || @keywords,
         before_property_validation: options[:before_property_validation]? || @before_property_validation,
         after_property_validation: options[:after_property_validation]? || @after_property_validation,
-        insert_property_defaults: options.has_key?(:insert_property_defaults) ? options[:insert_property_defaults].as(Bool | Symbol) : @insert_property_defaults,
+        insert_property_defaults: options.has_key?(:insert_property_defaults) ? options[:insert_property_defaults].as(Bool) : @insert_property_defaults,
         property_default_resolver: options[:property_default_resolver]? || @property_default_resolver,
         ref_resolver: options[:ref_resolver]? || @ref_resolver,
         regexp_resolver: options[:regexp_resolver]? || @regexp_resolver,
