@@ -32,6 +32,7 @@ module JsonSchemer
     # Context struct for validation state
     class Context
       property instance : JSON::Any
+      property original_instance_ref : JSON::Any?
       property dynamic_scope : Array(Schema)
       property adjacent_results : Hash(Keyword.class, Result)?
       property short_circuit : Bool
@@ -43,6 +44,7 @@ module JsonSchemer
         @adjacent_results : Hash(Keyword.class, Result)? = nil,
         @short_circuit : Bool = false,
         @access_mode : String? = nil,
+        @original_instance_ref : JSON::Any? = nil,
       )
       end
 
@@ -232,7 +234,6 @@ module JsonSchemer
         access_mode: access_mode || base_config.access_mode
       )
       @configuration = config
-      # debugger if meta_schema == "https://spec.openapis.org/oas/3.1/dialect/2024-11-10"
 
       @base_uri = config.base_uri
       @meta_schema = config.meta_schema
@@ -307,9 +308,13 @@ module JsonSchemer
       access_mode : String? = nil,
     ) : Hash(String, JSON::Any)
       resolved_output_format = output_format || configuration.output_format
-      # Note: resolve_enumerators is available for future use but not currently implemented
-      _ = resolve_enumerators.nil? ? configuration.resolve_enumerators : resolve_enumerators
+      # Note: resolve_enumerators is accepted for API compatibility but is a no-op in Crystal.
+      # Crystal does not have Ruby's lazy Enumerator type, so there is nothing to resolve.
       resolved_access_mode = access_mode || configuration.access_mode
+
+      # Keep reference to the original instance for insert_property_defaults mutation
+      original_ref = instance.is_a?(JSON::Any) ? instance : nil
+
       # Convert instance to JSON::Any
       json_instance = case instance
                       when JSON::Any
@@ -330,10 +335,35 @@ module JsonSchemer
         [] of Schema,
         nil,
         resolved_output_format == "flag",
-        resolved_access_mode
+        resolved_access_mode,
+        original_ref
       )
 
       result = validate_instance(json_instance, instance_location, context)
+
+      # Insert property defaults if configured
+      insert_defaults = configuration.insert_property_defaults
+      if insert_defaults
+        defaults_inserted = if pdr = configuration.property_default_resolver
+                              result.insert_property_defaults(context) { |v, p, r| pdr.call(v, p, r) }
+                            else
+                              result.insert_property_defaults(context)
+                            end
+
+        if defaults_inserted
+          # Re-validate after inserting defaults
+          context = Context.new(
+            json_instance,
+            [] of Schema,
+            nil,
+            resolved_output_format == "flag",
+            resolved_access_mode,
+            original_ref
+          )
+          result = validate_instance(json_instance, instance_location, context)
+        end
+      end
+
       result.output(resolved_output_format)
     end
 

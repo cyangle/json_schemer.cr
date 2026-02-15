@@ -48,7 +48,9 @@ module JsonSchemer
             case res.source
             when Applicator::PrefixItems
               if ann = res.annotation
-                if ann.as_i?
+                if ann.as_bool?
+                  unevaluated_items.clear
+                elsif ann.as_i?
                   (0..ann.as_i).each { |i| unevaluated_items.delete(i) }
                 end
               end
