@@ -334,7 +334,7 @@ module JsonSchemer
         json_instance,
         [] of Schema,
         nil,
-        resolved_output_format == "flag",
+        resolved_output_format == "flag" && !configuration.insert_property_defaults,
         resolved_access_mode,
         original_ref
       )

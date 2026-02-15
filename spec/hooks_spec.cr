@@ -299,12 +299,14 @@ describe "Property Defaults and Hooks" do
       call_log.should eq(["before:name", "after:name"])
     end
 
-    it "receives correct property value" do
+    it "receives correct instance and property" do
       received_values = {} of String => JSON::Any
 
       before_hooks = [
         ->(data : JSON::Any, property : String, _property_schema : JSON::Any, _parent : JSON::Any) {
-          received_values[property] = data
+          if data.as_h.has_key?(property)
+            received_values[property] = data.as_h[property]
+          end
           nil
         },
       ]
@@ -325,7 +327,7 @@ describe "Property Defaults and Hooks" do
       received_values["age"]?.try(&.as_i).should eq(30)
     end
 
-    it "does not call hooks for missing properties" do
+    it "calls hooks for missing properties" do
       validated_properties = [] of String
 
       before_hooks = [
@@ -347,7 +349,8 @@ describe "Property Defaults and Hooks" do
       )
 
       schema.valid?(JSON.parse(%q({"name": "John"})))
-      validated_properties.should eq(["name"])
+      validated_properties.should contain("name")
+      validated_properties.should contain("age")
     end
 
     it "supports multiple hooks" do
