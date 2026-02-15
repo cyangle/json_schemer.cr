@@ -403,5 +403,35 @@ describe "Property Defaults and Hooks" do
       schema.valid?(JSON::Any.new("just a string"))
       called.should be_false
     end
+
+    it "persists modifications to original data" do
+      cast_hook = ->(instance : JSON::Any, property : String, _prop_schema : JSON::Any, _parent : JSON::Any) {
+        if property == "age" && instance.as_h.has_key?("age")
+          val = instance.as_h["age"]
+          if val.raw.is_a?(String)
+            begin
+              instance.as_h["age"] = JSON::Any.new(val.as_s.to_i64)
+            rescue
+            end
+          end
+        end
+        nil
+      }
+
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({
+          "properties": {
+            "age": {"type": "integer"}
+          }
+        })).as_h,
+        before_property_validation: [cast_hook]
+      )
+
+      data = JSON.parse(%q({"age": "123"}))
+      schema.validate(data)
+      
+      # Original data should be modified
+      data["age"].as_i.should eq(123)
+    end
   end
 end

@@ -230,11 +230,9 @@ module JsonSchemer
               @schemas[index].validate_instance(item, join_location(instance_location, index.to_s), context)
             end
 
-            annotation_value = if nested.size == arr.size
-                                 true
-                               else
-                                 (nested.size - 1).to_i64
-                               end
+            # Annotation result is the integer index of the last item validated
+            # If no items validated, returns -1
+            annotation_value = (nested.size - 1).to_i64
             result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(annotation_value))
           end
         end
@@ -257,12 +255,10 @@ module JsonSchemer
             end
 
             prefix_items_result = context.adjacent_results.try(&.[PrefixItems]?)
-            offset = if prefix_items_result && prefix_items_result.annotation.try(&.as_bool?)
-                       instance.as_a.size
-                     else
-                       evaluated_index = prefix_items_result.try(&.annotation.try(&.as_i?)) || -1
-                       evaluated_index + 1
-                     end
+            # PrefixItems annotation is the last index validated (or -1)
+            # Start items validation after that index
+            evaluated_index = prefix_items_result.try(&.annotation.try(&.as_i64?)) || -1
+            offset = evaluated_index + 1
 
             items_schema = @subschema
             return result(instance, instance_location, location, true) unless items_schema
@@ -341,11 +337,23 @@ module JsonSchemer
 
             # 1. Run before hooks for ALL properties (including missing)
             if before_hooks && !before_hooks.empty?
+              orig_instance = context.original_instance(instance_location)
+              hooks_ran = false
+
               @schemas.each do |property, prop_schema|
                 before_hooks.each do |hook|
                   # Match Ruby API: (instance, property, prop_schema, parent_schema)
-                  hook.call(instance, property, prop_schema.value, schema.value)
+                  # Use original instance (mutable) for hooks
+                  hook.call(orig_instance, property, prop_schema.value, schema.value)
+                  hooks_ran = true
                 end
+              end
+
+              # Sync validation copy from original if hooks ran
+              # This allows hooks to modify data before validation (e.g. casting types)
+              if hooks_ran && orig_instance.raw.is_a?(Hash) && instance.raw.is_a?(Hash)
+                instance.as_h.clear
+                instance.as_h.merge!(deep_stringify_keys(orig_instance).as_h)
               end
             end
 
@@ -366,11 +374,20 @@ module JsonSchemer
 
             # 3. Run after hooks for ALL properties (including missing)
             if after_hooks && !after_hooks.empty?
+              orig_instance = context.original_instance(instance_location)
+              hooks_ran = false
+
               @schemas.each do |property, prop_schema|
                 after_hooks.each do |hook|
                   # Match Ruby API: (instance, property, prop_schema, parent_schema)
-                  hook.call(instance, property, prop_schema.value, schema.value)
+                  hook.call(orig_instance, property, prop_schema.value, schema.value)
+                  hooks_ran = true
                 end
+              end
+
+              if hooks_ran && orig_instance.raw.is_a?(Hash) && instance.raw.is_a?(Hash)
+                instance.as_h.clear
+                instance.as_h.merge!(deep_stringify_keys(orig_instance).as_h)
               end
             end
 
