@@ -368,17 +368,16 @@ schema = JsonSchemer.schema(
 
 ## Format Validation
 
-By default in Draft 2020-12, format is annotation-only (doesn't cause validation failures). Use `format: true` to enable format validation:
+The library enables format validation by default (`true`). To follow Draft 2020-12 strict annotation-only behavior, set this to `false`.
 
 ```crystal
-# Annotation only (default)
-schema = JsonSchemer.schema(%q({"format": "email"}), format: false)
-schema.valid?(JSON::Any.new("not-an-email"))  # => true (format is just annotation)
+# Default: format validation is enabled
+schema = JsonSchemer.schema(%q({"format": "email"}))
+schema.valid?(JSON::Any.new("invalid"))  # => false
 
-# Assertion mode
-schema = JsonSchemer.schema(%q({"format": "email"}), format: true)
-schema.valid?(JSON::Any.new("user@example.com"))  # => true
-schema.valid?(JSON::Any.new("not-an-email"))      # => false
+# Disable format assertion (annotation-only)
+schema = JsonSchemer.schema(%q({"format": "email"}), format: false)
+schema.valid?(JSON::Any.new("invalid"))  # => true
 ```
 
 Supported formats:
