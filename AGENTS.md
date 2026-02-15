@@ -91,6 +91,8 @@ spec/
   spec_helper.cr               # Shared test setup
   json_schemer_spec.cr         # Main test suite
   format_spec.cr               # Format validation tests
+  format/
+    dns_hostname_spec.cr       # DNS hostname validation tests
   ref_spec.cr                  # $ref resolution tests
   hooks_spec.cr                # Validation hooks tests
   options_spec.cr              # Configuration options tests
@@ -110,6 +112,8 @@ spec/
   custom_keyword_location_spec.cr # Custom keyword location tests
   memory_leak_spec.cr          # Memory leak detection tests
   memory_profiling.cr          # Memory profiling tool
+  performance/                 # Performance benchmarks
+    benchmark.cr
   json_schema_test_suite_spec.cr  # JSON Schema Test Suite integration
 ```
 
@@ -393,7 +397,7 @@ git submodule update --remote JSON-Schema-Test-Suite
 3. **BigDecimal for precision**: Use `BigDecimal` for numeric comparisons (multipleOf)
 4. **Location tracking**: Use `Location` module for JSON pointer paths
 5. **Lazy initialization**: Use `@field ||= ...` pattern for cached values
-6. **Draft 2020-12 default**: Format validation is annotation-only by default
+6. **Format validation default**: Enabled by default (`true`). Use `format: false` for strict annotation-only behavior.
 7. **ECMA regexp**: Use `regexp_resolver: "ecma"` for JavaScript-compatible patterns
 8. **OpenAPI 3.1/3.2 support**: Use `JsonSchemer.openapi(document)` for OpenAPI document validation
 9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.

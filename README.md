@@ -227,7 +227,7 @@ This section provides a complete reference for all configuration options availab
 | `base_uri` | `URI?` | `nil` (auto-generated) | Base URI for resolving relative `$ref` URIs |
 | `meta_schema` | `Schema \| String \| Nil` | `"https://json-schema.org/draft/2020-12/schema"` | Meta-schema for validation |
 | `vocabulary` | `Hash(String, Bool)?` | `nil` | Custom vocabulary configuration |
-| `format` | `Bool?` | `false` (annotation-only) | Enable format validation as assertion |
+| `format` | `Bool?` | `true` (enabled by default) | Enable format validation as assertion |
 | `formats` | `Hash(String, FormatValidator)?` | `{}` | Custom format validators |
 | `content_encodings` | `Hash(String, ContentEncodingValidator)?` | `{}` | Custom content encoding validators |
 | `content_media_types` | `Hash(String, ContentMediaTypeValidator)?` | `{}` | Custom content media type validators |
@@ -276,16 +276,16 @@ schema = JsonSchemer.schema(
 
 #### `format`
 
-Controls whether format validation causes validation failures. Per Draft 2020-12, format is annotation-only by default.
+Controls whether format validation causes validation failures. The library enables format validation by default (`true`). To follow Draft 2020-12 strict annotation-only behavior, set this to `false`.
 
 ```crystal
-# Default: format is annotation-only (doesn't cause failures)
+# Default: format validation is enabled
 schema = JsonSchemer.schema(%q({"format": "email"}))
-schema.valid?(JSON::Any.new("invalid"))  # => true
-
-# Enable format assertion
-schema = JsonSchemer.schema(%q({"format": "email"}), format: true)
 schema.valid?(JSON::Any.new("invalid"))  # => false
+
+# Disable format assertion (annotation-only)
+schema = JsonSchemer.schema(%q({"format": "email"}), format: false)
+schema.valid?(JSON::Any.new("invalid"))  # => true
 ```
 
 #### `formats`
