@@ -230,8 +230,12 @@ module JsonSchemer
               @schemas[index].validate_instance(item, join_location(instance_location, index.to_s), context)
             end
 
-            annotation_value = nested.size - 1
-            result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(annotation_value.to_i64))
+            annotation_value = if nested.size == arr.size
+                                 true
+                               else
+                                 (nested.size - 1).to_i64
+                               end
+            result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(annotation_value))
           end
         end
 
@@ -253,8 +257,12 @@ module JsonSchemer
             end
 
             prefix_items_result = context.adjacent_results.try(&.[PrefixItems]?)
-            evaluated_index = prefix_items_result.try(&.annotation.try(&.as_i?)) || -1
-            offset = evaluated_index + 1
+            offset = if prefix_items_result && prefix_items_result.annotation.try(&.as_bool?)
+                       instance.as_a.size
+                     else
+                       evaluated_index = prefix_items_result.try(&.annotation.try(&.as_i?)) || -1
+                       evaluated_index + 1
+                     end
 
             items_schema = @subschema
             return result(instance, instance_location, location, true) unless items_schema
@@ -310,7 +318,7 @@ module JsonSchemer
 
         # Properties keyword
         class Properties < Keyword
-          @schemas : Hash(String, Schema) = {} of String => Schema
+          getter schemas : Hash(String, Schema) = {} of String => Schema
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match corresponding `properties` schemas"
@@ -328,14 +336,30 @@ module JsonSchemer
             evaluated_keys = [] of String
             nested = [] of Result
 
+            before_hooks = root.configuration.before_property_validation
+            after_hooks = root.configuration.after_property_validation
+
             @schemas.each do |property, prop_schema|
               if instance.as_h.has_key?(property)
                 evaluated_keys << property
-                nested << prop_schema.validate_instance(
-                  instance.as_h[property],
+                property_value = instance.as_h[property]
+
+                # Call before_property_validation hooks
+                before_hooks.each do |hook|
+                  hook.call(property_value, property, prop_schema.value, instance)
+                end
+
+                prop_result = prop_schema.validate_instance(
+                  property_value,
                   join_location(instance_location, property),
                   context
                 )
+                nested << prop_result
+
+                # Call after_property_validation hooks
+                after_hooks.each do |hook|
+                  hook.call(property_value, property, prop_schema.value, instance)
+                end
               end
             end
 
