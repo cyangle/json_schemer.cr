@@ -261,10 +261,10 @@ module JsonSchemer
 
     # Inserts default values from the result tree into the original instance.
     # Returns true if any defaults were inserted (indicating re-validation is needed).
-    def insert_property_defaults(context : Schema::Context, &block : JSON::Any, String, Array(Tuple(Result, Bool)) -> Bool) : Bool
+    def insert_property_defaults(context : Schema::Context, & : JSON::Any, String, Array(Tuple(Result, Bool)) -> Bool) : Bool
       # Store candidates: Key = {instance_pointer, property_name}, Value = List of {default_value, source_result, path_valid}
-      candidates = Hash(Tuple(String, String), Array(Tuple(JSON::Any, Result, Bool))).new do |h, k|
-        h[k] = [] of Tuple(JSON::Any, Result, Bool)
+      candidates = Hash(Tuple(String, String), Array(Tuple(JSON::Any, Result, Bool))).new do |hash, key|
+        hash[key] = [] of Tuple(JSON::Any, Result, Bool)
       end
 
       collect_property_defaults(context, candidates, valid)

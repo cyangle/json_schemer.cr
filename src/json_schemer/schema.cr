@@ -345,7 +345,7 @@ module JsonSchemer
       insert_defaults = configuration.insert_property_defaults
       if insert_defaults
         defaults_inserted = if pdr = configuration.property_default_resolver
-                              result.insert_property_defaults(context) { |v, p, r| pdr.call(v, p, r) }
+                              result.insert_property_defaults(context) { |value, property, results| pdr.call(value, property, results) }
                             else
                               result.insert_property_defaults(context)
                             end
