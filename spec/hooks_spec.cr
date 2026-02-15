@@ -168,20 +168,20 @@ describe "Property Defaults and Hooks" do
       # First validation: get default
       data1 = JSON.parse(%q({}))
       schema.validate(data1)
-      
+
       tags1 = data1.as_h["tags"].as_a
       tags1.should eq([JSON::Any.new("initial")])
-      
+
       # Mutate the inserted default value
       tags1 << JSON::Any.new("modified")
-      
+
       # Verify mutation happened in data1
       data1.as_h["tags"].as_a.should eq([JSON::Any.new("initial"), JSON::Any.new("modified")])
-      
+
       # Second validation: should get fresh default
       data2 = JSON.parse(%q({}))
       schema.validate(data2)
-      
+
       tags2 = data2.as_h["tags"].as_a
       # This assertion ensures default_value is cloned
       tags2.should eq([JSON::Any.new("initial")])
@@ -429,7 +429,7 @@ describe "Property Defaults and Hooks" do
 
       data = JSON.parse(%q({"age": "123"}))
       schema.validate(data)
-      
+
       # Original data should be modified
       data["age"].as_i.should eq(123)
     end
