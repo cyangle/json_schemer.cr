@@ -52,7 +52,7 @@ module JsonSchemer
         path = Location.resolve(instance_location)
         tokens = Hana::Pointer.parse(path)
 
-        result = instance
+        result = original_instance_ref || instance
         tokens.each do |token|
           case result.raw
           when Array
