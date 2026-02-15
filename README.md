@@ -472,7 +472,7 @@ write_schema.valid?(JSON.parse(%q({"password": "secret"})))  # => true
 
 #### `insert_property_defaults`
 
-Accepts a boolean to enable default value insertion. **Note:** This option is accepted for API compatibility but default insertion is not fully implemented. The `default` keyword works as an annotation only.
+Accepts a boolean to enable default value insertion. Default values are inserted into the validated instance.
 
 ```crystal
 schema = JsonSchemer.schema(
@@ -484,10 +484,10 @@ schema = JsonSchemer.schema(
   insert_property_defaults: true
 )
 
-# Default values are NOT inserted into the data
+# Default values are inserted into the data
 data = JSON.parse(%q({}))
 schema.validate(data)
-data.as_h.has_key?("status")  # => false
+data.as_h["status"].as_s  # => "active"
 ```
 
 #### `keywords`
@@ -533,14 +533,14 @@ Hooks that are called before and after each property is validated. Useful for lo
 
 ```crystal
 before_hooks = [
-  ->(data : JSON::Any, property : String, property_schema : JSON::Any, parent : JSON::Any) {
+  ->(instance : JSON::Any, property : String, property_schema : JSON::Any, parent_schema : JSON::Any) {
     puts "Validating property: #{property}"
     nil
   }
 ]
 
 after_hooks = [
-  ->(data : JSON::Any, property : String, property_schema : JSON::Any, parent : JSON::Any) {
+  ->(instance : JSON::Any, property : String, property_schema : JSON::Any, parent_schema : JSON::Any) {
     puts "Finished validating: #{property}"
     nil
   }
@@ -587,9 +587,6 @@ While ECMA-262 regex patterns are supported via the `regexp_resolver: "ecma"` op
 Some edge cases in internationalized hostname validation may differ due to UTS#46 vs IDNA2008 implementation differences. Specifically:
 - Characters like U+302E (Hangul single dot tone mark)
 - Some "Exceptions that are DISALLOWED" characters
-
-### Property Defaults Insertion
-The `insert_property_defaults` option is accepted but default value insertion during validation is not fully implemented. The `default` keyword works as an annotation only.
 
 ### Other API Compatibility Options
 The `property_default_resolver` and `resolve_enumerators` options are accepted for API compatibility but may have limited functionality.
