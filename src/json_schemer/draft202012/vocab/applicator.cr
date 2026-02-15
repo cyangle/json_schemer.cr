@@ -339,15 +339,21 @@ module JsonSchemer
             before_hooks = root.configuration.before_property_validation
             after_hooks = root.configuration.after_property_validation
 
+            # 1. Run before hooks for ALL properties (including missing)
+            if before_hooks && !before_hooks.empty?
+              @schemas.each do |property, prop_schema|
+                before_hooks.each do |hook|
+                  # Match Ruby API: (instance, property, prop_schema, parent_schema)
+                  hook.call(instance, property, prop_schema.value, schema.value)
+                end
+              end
+            end
+
+            # 2. Validation
             @schemas.each do |property, prop_schema|
               if instance.as_h.has_key?(property)
                 evaluated_keys << property
                 property_value = instance.as_h[property]
-
-                # Call before_property_validation hooks
-                before_hooks.each do |hook|
-                  hook.call(property_value, property, prop_schema.value, instance)
-                end
 
                 prop_result = prop_schema.validate_instance(
                   property_value,
@@ -355,10 +361,15 @@ module JsonSchemer
                   context
                 )
                 nested << prop_result
+              end
+            end
 
-                # Call after_property_validation hooks
+            # 3. Run after hooks for ALL properties (including missing)
+            if after_hooks && !after_hooks.empty?
+              @schemas.each do |property, prop_schema|
                 after_hooks.each do |hook|
-                  hook.call(property_value, property, prop_schema.value, instance)
+                  # Match Ruby API: (instance, property, prop_schema, parent_schema)
+                  hook.call(instance, property, prop_schema.value, schema.value)
                 end
               end
             end
