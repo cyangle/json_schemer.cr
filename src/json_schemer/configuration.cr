@@ -59,11 +59,6 @@ module JsonSchemer
     # Custom keywords.
     property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))
 
-    # Hooks to run before validating a property.
-    property before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))
-
-    # Hooks to run after validating a property.
-    property after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))
 
     # Whether to insert default values (not fully implemented).
     property insert_property_defaults : Bool
@@ -99,8 +94,6 @@ module JsonSchemer
       @content_encodings : Hash(String, Content::ContentEncodingValidator) = {} of String => Content::ContentEncodingValidator,
       @content_media_types : Hash(String, Content::ContentMediaTypeValidator) = {} of String => Content::ContentMediaTypeValidator,
       @keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)),
-      @before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil)) = [] of Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil),
-      @after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil)) = [] of Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil),
       @insert_property_defaults : Bool = false,
       @property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       @ref_resolver : Proc(URI, JSONHash?) | String = DEFAULT_REF_RESOLVER,
@@ -121,8 +114,6 @@ module JsonSchemer
         content_encodings: options[:content_encodings]? || @content_encodings,
         content_media_types: options[:content_media_types]? || @content_media_types,
         keywords: options[:keywords]? || @keywords,
-        before_property_validation: options[:before_property_validation]? || @before_property_validation,
-        after_property_validation: options[:after_property_validation]? || @after_property_validation,
         insert_property_defaults: options.has_key?(:insert_property_defaults) ? options[:insert_property_defaults].as(Bool) : @insert_property_defaults,
         property_default_resolver: options[:property_default_resolver]? || @property_default_resolver,
         ref_resolver: options[:ref_resolver]? || @ref_resolver,

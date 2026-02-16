@@ -239,8 +239,6 @@ This section provides a complete reference for all configuration options availab
 | `insert_property_defaults` | `Bool` | `false` | Insert default values (annotation only) |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
 | `resolve_enumerators` | `Bool?` | `false` | Whether to resolve enumerators during validation |
-| `before_property_validation` | `Array(Proc)?` | `[]` | Hooks called before property validation |
-| `after_property_validation` | `Array(Proc)?` | `[]` | Hooks called after property validation |
 
 ### Detailed Option Descriptions
 
@@ -527,31 +525,6 @@ Custom resolver for property defaults. This advanced option allows control over 
 
 When set to `true`, allows resolving enumerators during validation. Defaults to `false`. **Note:** This option is accepted for API compatibility but behavior may be limited.
 
-#### `before_property_validation` / `after_property_validation`
-
-Hooks that are called before and after each property is validated. Useful for logging, transformation, or side effects.
-
-```crystal
-before_hooks = [
-  ->(instance : JSON::Any, property : String, property_schema : JSON::Any, parent_schema : JSON::Any) {
-    puts "Validating property: #{property}"
-    nil
-  }
-]
-
-after_hooks = [
-  ->(instance : JSON::Any, property : String, property_schema : JSON::Any, parent_schema : JSON::Any) {
-    puts "Finished validating: #{property}"
-    nil
-  }
-]
-
-schema = JsonSchemer.schema(
-  schema_hash,
-  before_property_validation: before_hooks,
-  after_property_validation: after_hooks
-)
-```
 
 ### Global Configuration
 
