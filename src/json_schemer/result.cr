@@ -13,11 +13,6 @@ module JsonSchemer
     property ignore_nested : Bool
     property nested_key : String
 
-    @resolved_instance_location : String?
-    @resolved_keyword_location : String?
-    @formatted_instance_location : String?
-    @error : String?
-
     def initialize(
       @source : Schema | Keyword,
       @instance : JSON::Any,
@@ -57,15 +52,13 @@ module JsonSchemer
     end
 
     # Get error message
-    def error : String
-      @error ||= begin
-        custom_msg = source.x_error
+    getter error : String do
+      custom_msg = source.x_error
 
-        if custom_msg
-          interpolate(custom_msg)
-        else
-          source.error(formatted_instance_location: formatted_instance_location, details: details)
-        end
+      if custom_msg
+        interpolate(custom_msg)
+      else
+        source.error(formatted_instance_location: formatted_instance_location, details: details)
       end
     end
 
@@ -243,20 +236,125 @@ module JsonSchemer
       end
     end
 
-    private def resolved_instance_location : String
-      @resolved_instance_location ||= Location.resolve(instance_location)
+    private getter resolved_instance_location : String do
+      Location.resolve(instance_location)
     end
 
-    private def formatted_instance_location : String
-      @formatted_instance_location ||= resolved_instance_location.empty? ? "root" : "`#{resolved_instance_location}`"
+    private getter formatted_instance_location : String do
+      resolved_instance_location.empty? ? "root" : "`#{resolved_instance_location}`"
     end
 
-    private def resolved_keyword_location : String
-      @resolved_keyword_location ||= Location.resolve(keyword_location)
+    private getter resolved_keyword_location : String do
+      Location.resolve(keyword_location)
     end
 
     private def classic_error_type : String
       source.class.name.split("::").last.downcase
+    end
+
+    # Inserts default values from the result tree into the original instance.
+    # Returns true if any defaults were inserted (indicating re-validation is needed).
+    def insert_property_defaults(context : Schema::Context, & : JSON::Any, String, Array(Tuple(Result, Bool)) -> Bool) : Bool
+      # Store candidates: Key = {instance_pointer, property_name}, Value = List of {default_value, source_result, path_valid}
+      candidates = Hash(Tuple(String, String), Array(Tuple(JSON::Any, Result, Bool))).new do |hash, key|
+        hash[key] = [] of Tuple(JSON::Any, Result, Bool)
+      end
+
+      collect_property_defaults(context, candidates, valid)
+
+      inserted = false
+
+      candidates.each do |(instance_ptr, property), entries|
+        # Check for value conflicts
+        # We use strict equality for JSON values
+        first_value = entries.first[0]
+        conflict = entries.any? { |e| e[0] != first_value }
+
+        unless conflict
+          results = entries.map { |e| {e[1], e[2]} }
+
+          if yield(first_value, property, results)
+            if apply_default(context, instance_ptr, property, first_value)
+              inserted = true
+            end
+          end
+        end
+      end
+
+      inserted
+    end
+
+    def insert_property_defaults(context : Schema::Context) : Bool
+      insert_property_defaults(context) { |_v, _p, _r| true }
+    end
+
+    protected def collect_property_defaults(context : Schema::Context, candidates : Hash(Tuple(String, String), Array(Tuple(JSON::Any, Result, Bool))), parent_valid : Bool)
+      n = nested
+      return unless n
+
+      n.each do |child_result|
+        # Skip NOT subschemas
+        next if child_result.source.is_a?(Draft202012::Vocab::Applicator::Not)
+
+        child_valid = parent_valid && child_result.valid
+
+        if child_result.source.is_a?(Draft202012::Vocab::Applicator::Properties)
+          properties_kw = child_result.source.as(Draft202012::Vocab::Applicator::Properties)
+
+          if child_result.instance.raw.is_a?(Hash)
+            instance_hash = child_result.instance.as_h
+            # Resolve pointer once
+            instance_ptr = Location.resolve(child_result.instance_location)
+
+            properties_kw.schemas.each do |property, prop_schema|
+              next if instance_hash.has_key?(property)
+
+              default_kw = prop_schema.parsed["default"]?
+              if default_kw.is_a?(Keyword)
+                default_value = default_kw.value
+                candidates[{instance_ptr, property}] << {default_value, child_result, child_valid}
+              end
+            end
+          end
+        end
+
+        # Recurse
+        child_result.collect_property_defaults(context, candidates, child_valid)
+      end
+    end
+
+    private def apply_default(context : Schema::Context, instance_ptr : String, property : String, value : JSON::Any) : Bool
+      # 1. Update working copy
+      target = navigate_instance_pointer(context.instance, instance_ptr)
+      return false unless target && target.raw.is_a?(Hash)
+
+      target_hash = target.as_h
+      return false if target_hash.has_key?(property)
+
+      target_hash[property] = value
+
+      true
+    end
+
+    # Navigate a JSON::Any instance using a string pointer
+    private def navigate_instance_pointer(instance : JSON::Any, pointer : String) : JSON::Any?
+      return instance if pointer.empty?
+      tokens = Hana::Pointer.parse(pointer)
+
+      result = instance
+      tokens.each do |token|
+        case result.raw
+        when Array
+          result = result.as_a[token.to_i]?
+          return nil unless result
+        when Hash
+          result = result.as_h[token]?
+          return nil unless result
+        else
+          return nil
+        end
+      end
+      result
     end
   end
 end

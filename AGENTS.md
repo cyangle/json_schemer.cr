@@ -91,6 +91,8 @@ spec/
   spec_helper.cr               # Shared test setup
   json_schemer_spec.cr         # Main test suite
   format_spec.cr               # Format validation tests
+  format/
+    dns_hostname_spec.cr       # DNS hostname validation tests
   ref_spec.cr                  # $ref resolution tests
   hooks_spec.cr                # Validation hooks tests
   options_spec.cr              # Configuration options tests
@@ -110,6 +112,8 @@ spec/
   custom_keyword_location_spec.cr # Custom keyword location tests
   memory_leak_spec.cr          # Memory leak detection tests
   memory_profiling.cr          # Memory profiling tool
+  performance/                 # Performance benchmarks
+    benchmark.cr
   json_schema_test_suite_spec.cr  # JSON Schema Test Suite integration
 ```
 
@@ -156,6 +160,42 @@ require "./json_schemer/errors"
   - `$ref` -> `Ref`
   - `$dynamicAnchor` -> `DynamicAnchor`
   - `additionalProperties` -> `AdditionalProperties`
+
+### Property Macros
+Use built-in macros to define instance variables and accessors concisely.
+
+- **Standard Accessors**:
+  - `getter name` (Reader): Defines `@name` and `def name`.
+  - `setter name` (Writer): Defines `@name` and `def name=(value)`.
+  - `property name` (Both): Defines `@name`, `def name`, and `def name=(value)`.
+
+- **Type & Initialization**:
+  - `getter name : String` (Typed)
+  - `getter name : String = "default"` (Initial value)
+  - `property name : Int32 = 0` (Combined)
+
+- **Lazy Initialization**:
+  - Use block syntax with `getter` for values calculated on first access.
+  ```crystal
+  getter lazy_val : String do
+    complex_calculation
+  end
+  ```
+
+- **Nil-safe Accessors (`!` suffix)**:
+  - Use `getter!` / `property!` for nilable instance variables that should be treated as non-nil (raises `NilAssertionError` if nil).
+  - Useful for late initialization.
+  ```crystal
+  # @name is String?, but name returns String (raises if nil)
+  getter! name : String
+  ```
+
+- **Boolean Predicates (`?` suffix)**:
+  - Use `getter?` / `property?` for boolean variables.
+  - Generates `def name?` instead of `def name`.
+  ```crystal
+  getter? valid : Bool  # defines def valid? : Bool
+  ```
 
 ### Type Annotations
 - Always annotate method return types for public methods
@@ -292,7 +332,7 @@ end
 ```
 
 ## Dependencies
-- **hana**: JSON Pointer implementation (github: cyangle/hana.cr, >= 0.1.0)
+- **hana**: JSON Pointer implementation (github: cyangle/hana.cr, >= 0.1.1)
 - **simpleidn**: IDN/Punycode support for hostname validation (github: cyangle/simpleidn.cr, >= 0.8.0).
   - Optional but recommended for full compliance.
   - Requires `libicu`.
@@ -393,7 +433,7 @@ git submodule update --remote JSON-Schema-Test-Suite
 3. **BigDecimal for precision**: Use `BigDecimal` for numeric comparisons (multipleOf)
 4. **Location tracking**: Use `Location` module for JSON pointer paths
 5. **Lazy initialization**: Use `@field ||= ...` pattern for cached values
-6. **Draft 2020-12 default**: Format validation is annotation-only by default
+6. **Format validation default**: Enabled by default (`true`). Use `format: false` for strict annotation-only behavior.
 7. **ECMA regexp**: Use `regexp_resolver: "ecma"` for JavaScript-compatible patterns
 8. **OpenAPI 3.1/3.2 support**: Use `JsonSchemer.openapi(document)` for OpenAPI document validation
 9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.

@@ -227,7 +227,7 @@ This section provides a complete reference for all configuration options availab
 | `base_uri` | `URI?` | `nil` (auto-generated) | Base URI for resolving relative `$ref` URIs |
 | `meta_schema` | `Schema \| String \| Nil` | `"https://json-schema.org/draft/2020-12/schema"` | Meta-schema for validation |
 | `vocabulary` | `Hash(String, Bool)?` | `nil` | Custom vocabulary configuration |
-| `format` | `Bool?` | `false` (annotation-only) | Enable format validation as assertion |
+| `format` | `Bool?` | `true` (enabled by default) | Enable format validation as assertion |
 | `formats` | `Hash(String, FormatValidator)?` | `{}` | Custom format validators |
 | `content_encodings` | `Hash(String, ContentEncodingValidator)?` | `{}` | Custom content encoding validators |
 | `content_media_types` | `Hash(String, ContentMediaTypeValidator)?` | `{}` | Custom content media type validators |
@@ -236,11 +236,9 @@ This section provides a complete reference for all configuration options availab
 | `regexp_resolver` | `Proc(String, Regex?) \| String \| Nil` | `"ruby"` | Regex pattern resolver (`"ruby"` or `"ecma"`) |
 | `output_format` | `String?` | `"classic"` | Output format: `"flag"`, `"basic"`, or `"classic"` |
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
-| `insert_property_defaults` | `Bool \| Symbol` | `false` | Insert default values (annotation only) |
+| `insert_property_defaults` | `Bool` | `false` | Insert default values (annotation only) |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
 | `resolve_enumerators` | `Bool?` | `false` | Whether to resolve enumerators during validation |
-| `before_property_validation` | `Array(Proc)?` | `[]` | Hooks called before property validation |
-| `after_property_validation` | `Array(Proc)?` | `[]` | Hooks called after property validation |
 
 ### Detailed Option Descriptions
 
@@ -276,16 +274,16 @@ schema = JsonSchemer.schema(
 
 #### `format`
 
-Controls whether format validation causes validation failures. Per Draft 2020-12, format is annotation-only by default.
+Controls whether format validation causes validation failures. The library enables format validation by default (`true`). To follow Draft 2020-12 strict annotation-only behavior, set this to `false`.
 
 ```crystal
-# Default: format is annotation-only (doesn't cause failures)
+# Default: format validation is enabled
 schema = JsonSchemer.schema(%q({"format": "email"}))
-schema.valid?(JSON::Any.new("invalid"))  # => true
-
-# Enable format assertion
-schema = JsonSchemer.schema(%q({"format": "email"}), format: true)
 schema.valid?(JSON::Any.new("invalid"))  # => false
+
+# Disable format assertion (annotation-only)
+schema = JsonSchemer.schema(%q({"format": "email"}), format: false)
+schema.valid?(JSON::Any.new("invalid"))  # => true
 ```
 
 #### `formats`
@@ -472,7 +470,7 @@ write_schema.valid?(JSON.parse(%q({"password": "secret"})))  # => true
 
 #### `insert_property_defaults`
 
-Accepts a boolean to enable default value insertion. **Note:** This option is accepted for API compatibility but default insertion is not fully implemented. The `default` keyword works as an annotation only.
+Accepts a boolean to enable default value insertion. Default values are inserted into the validated instance.
 
 ```crystal
 schema = JsonSchemer.schema(
@@ -484,10 +482,10 @@ schema = JsonSchemer.schema(
   insert_property_defaults: true
 )
 
-# Default values are NOT inserted into the data
+# Default values are inserted into the data
 data = JSON.parse(%q({}))
 schema.validate(data)
-data.as_h.has_key?("status")  # => false
+data.as_h["status"].as_s  # => "active"
 ```
 
 #### `keywords`
@@ -527,31 +525,6 @@ Custom resolver for property defaults. This advanced option allows control over 
 
 When set to `true`, allows resolving enumerators during validation. Defaults to `false`. **Note:** This option is accepted for API compatibility but behavior may be limited.
 
-#### `before_property_validation` / `after_property_validation`
-
-Hooks that are called before and after each property is validated. Useful for logging, transformation, or side effects.
-
-```crystal
-before_hooks = [
-  ->(data : JSON::Any, property : String, property_schema : JSON::Any, parent : JSON::Any) {
-    puts "Validating property: #{property}"
-    nil
-  }
-]
-
-after_hooks = [
-  ->(data : JSON::Any, property : String, property_schema : JSON::Any, parent : JSON::Any) {
-    puts "Finished validating: #{property}"
-    nil
-  }
-]
-
-schema = JsonSchemer.schema(
-  schema_hash,
-  before_property_validation: before_hooks,
-  after_property_validation: after_hooks
-)
-```
 
 ### Global Configuration
 
@@ -587,9 +560,6 @@ While ECMA-262 regex patterns are supported via the `regexp_resolver: "ecma"` op
 Some edge cases in internationalized hostname validation may differ due to UTS#46 vs IDNA2008 implementation differences. Specifically:
 - Characters like U+302E (Hangul single dot tone mark)
 - Some "Exceptions that are DISALLOWED" characters
-
-### Property Defaults Insertion
-The `insert_property_defaults` option is accepted but default value insertion during validation is not fully implemented. The `default` keyword works as an annotation only.
 
 ### Other API Compatibility Options
 The `property_default_resolver` and `resolve_enumerators` options are accepted for API compatibility but may have limited functionality.

@@ -230,8 +230,10 @@ module JsonSchemer
               @schemas[index].validate_instance(item, join_location(instance_location, index.to_s), context)
             end
 
-            annotation_value = nested.size - 1
-            result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(annotation_value.to_i64))
+            # Annotation result is the integer index of the last item validated
+            # If no items validated, returns -1
+            annotation_value = (nested.size - 1).to_i64
+            result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(annotation_value))
           end
         end
 
@@ -253,7 +255,9 @@ module JsonSchemer
             end
 
             prefix_items_result = context.adjacent_results.try(&.[PrefixItems]?)
-            evaluated_index = prefix_items_result.try(&.annotation.try(&.as_i?)) || -1
+            # PrefixItems annotation is the last index validated (or -1)
+            # Start items validation after that index
+            evaluated_index = prefix_items_result.try(&.annotation.try(&.as_i64?)) || -1
             offset = evaluated_index + 1
 
             items_schema = @subschema
@@ -310,7 +314,7 @@ module JsonSchemer
 
         # Properties keyword
         class Properties < Keyword
-          @schemas : Hash(String, Schema) = {} of String => Schema
+          getter schemas : Hash(String, Schema) = {} of String => Schema
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match corresponding `properties` schemas"
@@ -331,11 +335,14 @@ module JsonSchemer
             @schemas.each do |property, prop_schema|
               if instance.as_h.has_key?(property)
                 evaluated_keys << property
-                nested << prop_schema.validate_instance(
-                  instance.as_h[property],
+                property_value = instance.as_h[property]
+
+                prop_result = prop_schema.validate_instance(
+                  property_value,
                   join_location(instance_location, property),
                   context
                 )
+                nested << prop_result
               end
             end
 

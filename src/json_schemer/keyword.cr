@@ -10,10 +10,7 @@ module JsonSchemer
     getter location : Location::Node
     getter parsed : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
 
-    @schema : Schema
-    @absolute_keyword_location : String?
-    @schema_pointer : String?
-    @escaped_keyword : String?
+    getter schema : Schema
 
     def initialize(@value : JSON::Any, @parent : Schema | Keyword, @keyword : String, schema : Schema? = nil)
       @root = parent.root
@@ -22,10 +19,6 @@ module JsonSchemer
       parse_result = parse
       # After parse, ensure instance variables are set if they were not nullable
       @parsed = parse_result
-    end
-
-    def schema : Schema
-      @schema
     end
 
     # Exclusive keyword? (e.g. $ref in older drafts)
@@ -39,13 +32,13 @@ module JsonSchemer
     end
 
     # Absolute keyword location for output
-    def absolute_keyword_location : String
-      @absolute_keyword_location ||= "#{parent.absolute_keyword_location}/#{fragment_encode(escaped_keyword)}"
+    getter absolute_keyword_location : String do
+      "#{parent.absolute_keyword_location}/#{fragment_encode(escaped_keyword)}"
     end
 
     # Schema pointer for output
-    def schema_pointer : String
-      @schema_pointer ||= "#{parent.schema_pointer}/#{escaped_keyword}"
+    getter schema_pointer : String do
+      "#{parent.schema_pointer}/#{escaped_keyword}"
     end
 
     # Error key for i18n
