@@ -126,15 +126,15 @@ describe "Custom Keyword Class with Vocabulary" do
       schema = JsonSchemer.schema(schema_json, ref_resolver: resolver)
 
       # Valid cases
-      schema.valid?("12.34").should be_true
-      schema.valid?("100.00").should be_true
-      schema.valid?("10.00").should be_true
+      schema.valid?(JSON::Any.new("12.34")).should be_true
+      schema.valid?(JSON::Any.new("100.00")).should be_true
+      schema.valid?(JSON::Any.new("10.00")).should be_true
 
       # Invalid format
-      schema.valid?("12").should be_false
+      schema.valid?(JSON::Any.new("12")).should be_false
 
       # Out of bounds
-      schema.valid?("9.99").should be_false
+      schema.valid?(JSON::Any.new("9.99")).should be_false
     ensure
       JsonSchemer::VOCABULARIES.delete("https://example.com/vocab/money")
       JsonSchemer::VOCABULARY_ORDER.delete("https://example.com/vocab/money")

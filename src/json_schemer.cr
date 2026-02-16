@@ -187,7 +187,7 @@ module JsonSchemer
   ) : Bool
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
     meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver)
-    meta.valid?(resolved_schema)
+    meta.valid?(JSON::Any.new(resolved_schema))
   end
 
   # Validates the given schema definition against its meta-schema and returns the validation result.
@@ -208,7 +208,7 @@ module JsonSchemer
   ) : Hash(String, JSON::Any)
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
     meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver)
-    meta.validate(resolved_schema, output_format: output_format)
+    meta.validate(JSON::Any.new(resolved_schema), output_format: output_format)
   end
 
   # Get draft 2020-12 meta schema

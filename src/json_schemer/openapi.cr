@@ -38,7 +38,7 @@ module JsonSchemer
       end
 
       @schema = Schema.new(
-        JSON::Any.new(@document.transform_values { |v| v }),
+        JSON::Any.new(@document),
         meta_schema: resolved_meta_schema,
         base_uri: base_uri,
         vocabulary: vocabulary,
@@ -78,7 +78,7 @@ module JsonSchemer
     # end
     # ```
     def valid? : Bool
-      @document_schema.valid?(JSON::Any.new(@document.transform_values { |v| v }))
+      @document_schema.valid?(JSON::Any.new(@document))
     end
 
     # Validates the OpenAPI document and returns the validation result.
@@ -93,7 +93,7 @@ module JsonSchemer
     # end
     # ```
     def validate(output_format : String = "classic") : Hash(String, JSON::Any)
-      @document_schema.validate(JSON::Any.new(@document.transform_values { |v| v }), output_format: output_format)
+      @document_schema.validate(JSON::Any.new(@document), output_format: output_format)
     end
 
     # Resolves a reference URI within the OpenAPI document.
@@ -107,7 +107,7 @@ module JsonSchemer
       if value.starts_with?("#/")
         path = value[1..]
         begin
-          target = Hana::Pointer.new(path).eval(JSON::Any.new(@document.transform_values { |v| v }))
+          target = Hana::Pointer.new(path).eval(JSON::Any.new(@document))
           Schema.new(
             target,
             root: @schema,

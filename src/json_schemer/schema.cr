@@ -227,15 +227,16 @@ module JsonSchemer
 
     # Validates an instance against the schema and returns true if valid.
     #
-    # The instance can be a `JSON::Any`, `Hash`, `Array`, or primitive types.
+    # The instance must be a `JSON::Any` or a JSON `String`.
     #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
-    # schema.valid?(10)   # => true
-    # schema.valid?("10") # => false
+    # schema.valid?(JSON::Any.new(10_i64)) # => true
+    # schema.valid?("10")                  # => true (parsed as 10)
+    # schema.valid?("\"10\"")              # => false (parsed as "10")
     # ```
     def valid?(
-      instance,
+      instance : JSON::Any | String,
       resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     ) : Bool
@@ -257,12 +258,12 @@ module JsonSchemer
     #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
-    # result = schema.validate("invalid")
+    # result = schema.validate("\"invalid\"")
     # puts result["valid"]  # => false
     # puts result["errors"] # => Array of errors
     # ```
     def validate(
-      instance,
+      instance : JSON::Any | String,
       output_format : String? = nil,
       resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
@@ -273,17 +274,10 @@ module JsonSchemer
       resolved_access_mode = access_mode || configuration.access_mode
 
       # Convert instance to JSON::Any
-      json_instance = case instance
-                      when JSON::Any
+      json_instance = if instance.is_a?(JSON::Any)
                         instance
-                      when Hash
-                        JSON.parse(instance.to_json)
-                      when Array
-                        JSON.parse(instance.to_json)
-                      when String, Number, Bool, Nil
-                        JSON::Any.new(instance)
                       else
-                        JSON.parse(instance.to_json)
+                        JSON.parse(instance)
                       end
 
       instance_location = Location.root

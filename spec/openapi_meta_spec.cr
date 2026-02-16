@@ -82,7 +82,7 @@ describe "OpenAPI Meta Schema Loading" do
     openapi.valid?.should be_true
 
     user_schema = openapi.schema("User")
-    user_schema.valid?({"name" => "John"}).should be_true
-    user_schema.valid?({"name" => "John", "extra" => 123}).should be_false
+    user_schema.valid?(JSON.parse(%q({"name": "John"}))).should be_true
+    user_schema.valid?(JSON.parse(%q({"name": "John", "extra": 123}))).should be_false
   end
 end
