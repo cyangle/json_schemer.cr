@@ -332,32 +332,6 @@ module JsonSchemer
             evaluated_keys = [] of String
             nested = [] of Result
 
-            before_hooks = root.configuration.before_property_validation
-            after_hooks = root.configuration.after_property_validation
-
-            # 1. Run before hooks for ALL properties (including missing)
-            if before_hooks && !before_hooks.empty?
-              orig_instance = context.original_instance(instance_location)
-              hooks_ran = false
-
-              @schemas.each do |property, prop_schema|
-                before_hooks.each do |hook|
-                  # Match Ruby API: (instance, property, prop_schema, parent_schema)
-                  # Use original instance (mutable) for hooks
-                  hook.call(orig_instance, property, prop_schema.value, schema.value)
-                  hooks_ran = true
-                end
-              end
-
-              # Sync validation copy from original if hooks ran
-              # This allows hooks to modify data before validation (e.g. casting types)
-              if hooks_ran && orig_instance.raw.is_a?(Hash) && instance.raw.is_a?(Hash)
-                instance.as_h.clear
-                instance.as_h.merge!(orig_instance.clone.as_h)
-              end
-            end
-
-            # 2. Validation
             @schemas.each do |property, prop_schema|
               if instance.as_h.has_key?(property)
                 evaluated_keys << property
@@ -369,25 +343,6 @@ module JsonSchemer
                   context
                 )
                 nested << prop_result
-              end
-            end
-
-            # 3. Run after hooks for ALL properties (including missing)
-            if after_hooks && !after_hooks.empty?
-              orig_instance = context.original_instance(instance_location)
-              hooks_ran = false
-
-              @schemas.each do |property, prop_schema|
-                after_hooks.each do |hook|
-                  # Match Ruby API: (instance, property, prop_schema, parent_schema)
-                  hook.call(orig_instance, property, prop_schema.value, schema.value)
-                  hooks_ran = true
-                end
-              end
-
-              if hooks_ran && orig_instance.raw.is_a?(Hash) && instance.raw.is_a?(Hash)
-                instance.as_h.clear
-                instance.as_h.merge!(orig_instance.clone.as_h)
               end
             end
 
