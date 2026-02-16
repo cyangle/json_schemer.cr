@@ -31,8 +31,8 @@ module JsonSchemer
     end
 
     # Escape keyword for JSON pointer
-    def escaped_keyword : String
-      @escaped_keyword ||= Location.escape_json_pointer_token(keyword)
+    getter escaped_keyword : String do
+      Location.escape_json_pointer_token(keyword)
     end
 
     # Join location with keyword

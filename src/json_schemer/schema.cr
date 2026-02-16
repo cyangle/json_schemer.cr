@@ -73,33 +73,18 @@ module JsonSchemer
     NOT_KEYWORD_CLASS        = Draft202012::Vocab::Applicator::Not
     PROPERTIES_KEYWORD_CLASS = Draft202012::Vocab::Applicator::Properties
 
-    @base_uri : URI?
-    @meta_schema : (Schema | String)?
-    @keywords : Hash(String, Keyword.class)?
-    @keyword_order : Hash(String, Int32)?
-    @value : JSON::Any?
-    @root : Schema?
-    @configuration : Configuration?
-    @parsed : Hash(String, Keyword)?
-
     property! base_uri : URI
     property! meta_schema : Schema | String
-    @keywords : Hash(String, Keyword.class)?
-    @keyword_order : Hash(String, Int32)?
+    setter keywords : Hash(String, Keyword.class)?
+    setter keyword_order : Hash(String, Int32)?
     property! value : JSON::Any
     property! root : Schema
     property! configuration : Configuration
     property! parsed : Hash(String, Keyword)
 
-    def keywords=(@keywords)
-    end
-
-    def keyword_order=(@keyword_order)
-    end
-
     def keywords : Hash(String, Keyword.class)
       @keywords || (
-        meta = @meta_schema
+        meta = resolved_meta_schema
         if meta.is_a?(Schema) && meta != self
           meta.keywords
         else
@@ -110,7 +95,7 @@ module JsonSchemer
 
     def keyword_order : Hash(String, Int32)
       @keyword_order || (
-        meta = @meta_schema
+        meta = resolved_meta_schema
         if meta.is_a?(Schema) && meta != self
           meta.keyword_order
         else
@@ -120,13 +105,8 @@ module JsonSchemer
     end
 
     getter parent : Schema | Keyword | Nil
-
-    @keyword : String = ""
+    getter keyword : String = ""
     getter location : Location::Node
-
-    def keyword : String
-      @keyword
-    end
 
     @resources : NamedTuple(lexical: Resources, dynamic: Resources)?
     @absolute_keyword_location : String?
@@ -779,14 +759,6 @@ module JsonSchemer
       io << " @value=" << @value.inspect
       io << " @keyword=" << @keyword.inspect
       io << ">"
-    end
-
-    def keywords : Hash(String, Keyword.class)
-      @keywords || resolved_meta_schema.keywords
-    end
-
-    def keyword_order : Hash(String, Int32)
-      @keyword_order || resolved_meta_schema.keyword_order
     end
 
     private def parse

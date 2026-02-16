@@ -161,6 +161,17 @@ require "./json_schemer/errors"
   - `$dynamicAnchor` -> `DynamicAnchor`
   - `additionalProperties` -> `AdditionalProperties`
 
+### Property Macros
+- Use `property`, `getter`, `setter` macros instead of manual method definitions where possible.
+- Use `property!` / `getter!` for non-nilable properties that are initialized later (but be careful with safety).
+- Use block syntax for lazy initialization with `getter`:
+  ```crystal
+  getter foo : String do
+    calculate_foo
+  end
+  ```
+- Use `property?` / `getter?` for boolean predicates.
+
 ### Type Annotations
 - Always annotate method return types for public methods
 - Use union types for nullable values: `Schema | Nil` or `Schema?`
