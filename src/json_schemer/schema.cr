@@ -49,11 +49,20 @@ module JsonSchemer
       end
 
       def original_instance(instance_location : Location::Node) : JSON::Any
-        path = Location.resolve(instance_location)
-        tokens = Hana::Pointer.parse(path)
+        # Optimized traversal: extract tokens directly from Location::Node
+        # to avoid string construction (Location.resolve) and parsing (Hana::Pointer.parse).
+        tokens = [] of String
+        current = instance_location
+        while name = current.name
+          tokens << name
+          current = current.parent
+          break unless current
+        end
 
         result = original_instance_ref || instance
-        tokens.each do |token|
+
+        # Tokens are collected in reverse order (leaf -> root), so iterate in reverse (root -> leaf)
+        tokens.reverse_each do |token|
           case result.raw
           when Array
             result = result.as_a[token.to_i]
@@ -176,11 +185,11 @@ module JsonSchemer
       # Convert value to JSON::Any
       @value = case value
                when JSON::Any
-                 deep_stringify_keys(value)
+                 value.clone
                when Bool
                  JSON::Any.new(value)
                else
-                 deep_stringify_keys(JSON::Any.new(value.transform_values { |v| v }))
+                 JSON::Any.new(value.transform_values { |v| v.clone })
                end
 
       @parent = parent
@@ -300,11 +309,11 @@ module JsonSchemer
       # Convert instance to JSON::Any
       json_instance = case instance
                       when JSON::Any
-                        deep_stringify_keys(instance)
+                        instance.clone
                       when Hash
-                        deep_stringify_keys(JSON.parse(instance.to_json))
+                        JSON.parse(instance.to_json)
                       when Array
-                        deep_stringify_keys(JSON.parse(instance.to_json))
+                        JSON.parse(instance.to_json)
                       when String, Number, Bool, Nil
                         JSON::Any.new(instance)
                       else
