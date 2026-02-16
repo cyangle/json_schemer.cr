@@ -13,11 +13,6 @@ module JsonSchemer
     property ignore_nested : Bool
     property nested_key : String
 
-    @resolved_instance_location : String?
-    @resolved_keyword_location : String?
-    @formatted_instance_location : String?
-    @error : String?
-
     def initialize(
       @source : Schema | Keyword,
       @instance : JSON::Any,
@@ -57,15 +52,13 @@ module JsonSchemer
     end
 
     # Get error message
-    def error : String
-      @error ||= begin
-        custom_msg = source.x_error
+    getter error : String do
+      custom_msg = source.x_error
 
-        if custom_msg
-          interpolate(custom_msg)
-        else
-          source.error(formatted_instance_location: formatted_instance_location, details: details)
-        end
+      if custom_msg
+        interpolate(custom_msg)
+      else
+        source.error(formatted_instance_location: formatted_instance_location, details: details)
       end
     end
 
@@ -243,16 +236,16 @@ module JsonSchemer
       end
     end
 
-    private def resolved_instance_location : String
-      @resolved_instance_location ||= Location.resolve(instance_location)
+    private getter resolved_instance_location : String do
+      Location.resolve(instance_location)
     end
 
-    private def formatted_instance_location : String
-      @formatted_instance_location ||= resolved_instance_location.empty? ? "root" : "`#{resolved_instance_location}`"
+    private getter formatted_instance_location : String do
+      resolved_instance_location.empty? ? "root" : "`#{resolved_instance_location}`"
     end
 
-    private def resolved_keyword_location : String
-      @resolved_keyword_location ||= Location.resolve(keyword_location)
+    private getter resolved_keyword_location : String do
+      Location.resolve(keyword_location)
     end
 
     private def classic_error_type : String
@@ -374,11 +367,6 @@ module JsonSchemer
         end
       end
       result
-    end
-
-    # Navigate a JSON::Any instance using a Location::Node path
-    private def navigate_instance(instance : JSON::Any, location : Location::Node) : JSON::Any?
-      navigate_instance_pointer(instance, Location.resolve(location))
     end
   end
 end
