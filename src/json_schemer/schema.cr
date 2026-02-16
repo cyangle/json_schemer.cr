@@ -45,31 +45,6 @@ module JsonSchemer
         @access_mode : String? = nil,
       )
       end
-
-      def original_instance(instance_location : Location::Node) : JSON::Any
-        # Optimized traversal: extract tokens directly from Location::Node
-        # to avoid string construction (Location.resolve) and parsing (Hana::Pointer.parse).
-        tokens = [] of String
-        current = instance_location
-        while name = current.name
-          tokens << name
-          current = current.parent
-          break unless current
-        end
-
-        result = instance
-
-        # Tokens are collected in reverse order (leaf -> root), so iterate in reverse (root -> leaf)
-        tokens.reverse_each do |token|
-          case result.raw
-          when Array
-            result = result.as_a[token.to_i]
-          when Hash
-            result = result.as_h[token]
-          end
-        end
-        result
-      end
     end
 
     # Class constants for keyword classes
@@ -185,7 +160,7 @@ module JsonSchemer
                when Bool
                  JSON::Any.new(value)
                else
-                 JSON::Any.new(value.transform_values { |v| v.clone })
+                 JSON::Any.new(value.transform_values(&.clone))
                end
 
       @parent = parent
