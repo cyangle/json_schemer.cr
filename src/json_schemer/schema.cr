@@ -75,12 +75,18 @@ module JsonSchemer
 
     property! base_uri : URI
     property! meta_schema : Schema | String
+
     setter keywords : Hash(String, Keyword.class)?
     setter keyword_order : Hash(String, Int32)?
-    property! value : JSON::Any
-    property! root : Schema
-    property! configuration : Configuration
-    property! parsed : Hash(String, Keyword)
+
+    getter! value : JSON::Any
+    getter! root : Schema
+    getter! configuration : Configuration
+    getter! parsed : Hash(String, Keyword)
+
+    getter parent : Schema | Keyword | Nil
+    getter keyword : String = ""
+    getter location : Location::Node
 
     def keywords : Hash(String, Keyword.class)
       @keywords || (
@@ -103,10 +109,6 @@ module JsonSchemer
         end
       )
     end
-
-    getter parent : Schema | Keyword | Nil
-    getter keyword : String = ""
-    getter location : Location::Node
 
     @resources : NamedTuple(lexical: Resources, dynamic: Resources)?
     @absolute_keyword_location : String?
