@@ -88,21 +88,25 @@ module JsonSchemer
     setter keywords : Hash(String, Keyword.class)?
     setter keyword_order : Hash(String, Int32)?
 
-    getter keywords : Hash(String, Keyword.class) do
-      meta = resolved_meta_schema
-      if meta.is_a?(Schema) && meta != self
-        meta.keywords
-      else
-        Draft202012::Vocab::ALL
+    def keywords : Hash(String, Keyword.class)
+      @keywords ||= begin
+        meta = resolved_meta_schema
+        if meta.is_a?(Schema) && meta != self
+          meta.keywords
+        else
+          Draft202012::Vocab::ALL
+        end
       end
     end
 
-    getter keyword_order : Hash(String, Int32) do
-      meta = resolved_meta_schema
-      if meta.is_a?(Schema) && meta != self
-        meta.keyword_order
-      else
-        {} of String => Int32 # Default order
+    def keyword_order : Hash(String, Int32)
+      @keyword_order ||= begin
+        meta = resolved_meta_schema
+        if meta.is_a?(Schema) && meta != self
+          meta.keyword_order
+        else
+          {} of String => Int32 # Default order
+        end
       end
     end
 
