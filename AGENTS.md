@@ -332,7 +332,7 @@ end
 ```
 
 ## Dependencies
-- **hana**: JSON Pointer implementation (github: cyangle/hana.cr, >= 0.1.0)
+- **hana**: JSON Pointer implementation (github: cyangle/hana.cr, >= 0.1.1)
 - **simpleidn**: IDN/Punycode support for hostname validation (github: cyangle/simpleidn.cr, >= 0.8.0).
   - Optional but recommended for full compliance.
   - Requires `libicu`.
