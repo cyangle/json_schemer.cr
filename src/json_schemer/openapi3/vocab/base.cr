@@ -88,7 +88,7 @@ module JsonSchemer
             # OpenAPI 3.2: If no matching subschema and defaultMapping is set, use it as fallback
             unless subschema
               if default_map = default_mapping
-                subschema = resolve_default_mapping(default_map)
+                subschema = resolve_schema_ref(default_map)
               end
             end
 
@@ -159,22 +159,11 @@ module JsonSchemer
                            property_value
                          end
 
-            if FIXED_FIELD_REGEX.matches?(schema_ref)
-              begin
-                return schema.ref("#/components/schemas/#{schema_ref}")
-              rescue InvalidRefPointer
-              end
-            end
-
-            begin
-              schema.ref(schema_ref)
-            rescue InvalidRefResolution | UnknownRef
-              nil
-            end
+            resolve_schema_ref(schema_ref)
           end
 
-          # OpenAPI 3.2: Resolve defaultMapping fallback schema reference
-          private def resolve_default_mapping(schema_ref : String) : Schema?
+          # Resolve schema reference (with component shorthand support)
+          private def resolve_schema_ref(schema_ref : String) : Schema?
             if FIXED_FIELD_REGEX.matches?(schema_ref)
               begin
                 return schema.ref("#/components/schemas/#{schema_ref}")

@@ -2,6 +2,53 @@ module JsonSchemer
   module Draft202012
     module Vocab
       module Validation
+        # Shared logic for integer limit keywords
+        module ParseIntLimit
+          def parse_int_limit(keyword_name : String) : Int64
+            raw = value.raw
+            if raw.is_a?(Int64)
+              raw
+            elsif raw.is_a?(Float64)
+              if raw == raw.floor
+                raw.to_i64
+              else
+                raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be an integer")
+              end
+            else
+              raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be a number")
+            end
+          end
+        end
+
+        # Base class for numeric limit keywords
+        abstract class NumericLimit < Keyword
+          @limit : Float64 = 0.0
+
+          abstract def compare(value : Float64, limit : Float64) : Bool
+          abstract def limit_name : String
+          abstract def error_message_relation : String
+
+          def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
+            "number at #{formatted_instance_location} is #{error_message_relation}: #{value}"
+          end
+
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
+            unless value.raw.is_a?(Number)
+              raise InvalidSchema.new("Value for keyword '#{limit_name}' must be a number")
+            end
+            @limit = value.raw.as(Number).to_f64
+            value
+          end
+
+          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
+            unless instance.raw.is_a?(Number)
+              return result(instance, instance_location, location, true)
+            end
+            valid = compare(instance.raw.as(Number).to_f64, @limit)
+            result(instance, instance_location, location, valid)
+          end
+        end
+
         # Type keyword
         class Type < Keyword
           @types : Array(String) = [] of String
@@ -161,107 +208,40 @@ module JsonSchemer
         end
 
         # Maximum keyword
-        class Maximum < Keyword
-          @max_value : Float64 = Float64::INFINITY
-
-          def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
-            "number at #{formatted_instance_location} is greater than: #{value}"
-          end
-
-          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            unless value.raw.is_a?(Number)
-              raise InvalidSchema.new("Value for keyword 'maximum' must be a number")
-            end
-            @max_value = value.raw.as(Number).to_f64
-            value
-          end
-
-          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, location, true)
-            end
-            valid = instance.raw.as(Number).to_f64 <= @max_value
-            result(instance, instance_location, location, valid)
-          end
+        class Maximum < NumericLimit
+          @limit : Float64 = Float64::INFINITY
+          def compare(value : Float64, limit : Float64) : Bool; value <= limit; end
+          def limit_name : String; "maximum"; end
+          def error_message_relation : String; "greater than"; end
         end
 
         # ExclusiveMaximum keyword
-        class ExclusiveMaximum < Keyword
-          @ex_max_value : Float64 = Float64::INFINITY
-
-          def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
-            "number at #{formatted_instance_location} is greater than or equal to: #{value}"
-          end
-
-          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            unless value.raw.is_a?(Number)
-              raise InvalidSchema.new("Value for keyword 'exclusiveMaximum' must be a number")
-            end
-            @ex_max_value = value.raw.as(Number).to_f64
-            value
-          end
-
-          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, location, true)
-            end
-            valid = instance.raw.as(Number).to_f64 < @ex_max_value
-            result(instance, instance_location, location, valid)
-          end
+        class ExclusiveMaximum < NumericLimit
+          @limit : Float64 = Float64::INFINITY
+          def compare(value : Float64, limit : Float64) : Bool; value < limit; end
+          def limit_name : String; "exclusiveMaximum"; end
+          def error_message_relation : String; "greater than or equal to"; end
         end
 
         # Minimum keyword
-        class Minimum < Keyword
-          @min_value : Float64 = -Float64::INFINITY
-
-          def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
-            "number at #{formatted_instance_location} is less than: #{value}"
-          end
-
-          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            unless value.raw.is_a?(Number)
-              raise InvalidSchema.new("Value for keyword 'minimum' must be a number")
-            end
-            @min_value = value.raw.as(Number).to_f64
-            value
-          end
-
-          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, location, true)
-            end
-            valid = instance.raw.as(Number).to_f64 >= @min_value
-            result(instance, instance_location, location, valid)
-          end
+        class Minimum < NumericLimit
+          @limit : Float64 = -Float64::INFINITY
+          def compare(value : Float64, limit : Float64) : Bool; value >= limit; end
+          def limit_name : String; "minimum"; end
+          def error_message_relation : String; "less than"; end
         end
 
         # ExclusiveMinimum keyword
-        class ExclusiveMinimum < Keyword
-          @ex_min_value : Float64 = -Float64::INFINITY
-
-          def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
-            "number at #{formatted_instance_location} is less than or equal to: #{value}"
-          end
-
-          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            unless value.raw.is_a?(Number)
-              raise InvalidSchema.new("Value for keyword 'exclusiveMinimum' must be a number")
-            end
-            @ex_min_value = value.raw.as(Number).to_f64
-            value
-          end
-
-          def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
-            unless instance.raw.is_a?(Number)
-              return result(instance, instance_location, location, true)
-            end
-            valid = instance.raw.as(Number).to_f64 > @ex_min_value
-            result(instance, instance_location, location, valid)
-          end
+        class ExclusiveMinimum < NumericLimit
+          @limit : Float64 = -Float64::INFINITY
+          def compare(value : Float64, limit : Float64) : Bool; value > limit; end
+          def limit_name : String; "exclusiveMinimum"; end
+          def error_message_relation : String; "less than or equal to"; end
         end
 
         # MaxLength keyword
         class MaxLength < Keyword
+          include ParseIntLimit
           @max_length : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
@@ -269,18 +249,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @max_length = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @max_length = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'maxLength' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'maxLength' must be a number")
-            end
+            @max_length = parse_int_limit("maxLength")
             value
           end
 
@@ -295,6 +264,7 @@ module JsonSchemer
 
         # MinLength keyword
         class MinLength < Keyword
+          include ParseIntLimit
           @min_length : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
@@ -302,18 +272,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @min_length = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @min_length = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'minLength' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'minLength' must be a number")
-            end
+            @min_length = parse_int_limit("minLength")
             value
           end
 
@@ -351,6 +310,7 @@ module JsonSchemer
 
         # MaxItems keyword
         class MaxItems < Keyword
+          include ParseIntLimit
           @max_items : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
@@ -358,18 +318,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @max_items = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @max_items = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'maxItems' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'maxItems' must be a number")
-            end
+            @max_items = parse_int_limit("maxItems")
             value
           end
 
@@ -384,6 +333,7 @@ module JsonSchemer
 
         # MinItems keyword
         class MinItems < Keyword
+          include ParseIntLimit
           @min_items : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
@@ -391,18 +341,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @min_items = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @min_items = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'minItems' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'minItems' must be a number")
-            end
+            @min_items = parse_int_limit("minItems")
             value
           end
 
@@ -442,6 +381,7 @@ module JsonSchemer
 
         # MaxContains keyword
         class MaxContains < Keyword
+          include ParseIntLimit
           @max_contains : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
@@ -449,18 +389,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @max_contains = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @max_contains = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'maxContains' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'maxContains' must be a number")
-            end
+            @max_contains = parse_int_limit("maxContains")
             value
           end
 
@@ -484,6 +413,7 @@ module JsonSchemer
 
         # MinContains keyword
         class MinContains < Keyword
+          include ParseIntLimit
           @min_contains : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
@@ -491,18 +421,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @min_contains = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @min_contains = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'minContains' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'minContains' must be a number")
-            end
+            @min_contains = parse_int_limit("minContains")
             value
           end
 
@@ -526,6 +445,7 @@ module JsonSchemer
 
         # MaxProperties keyword
         class MaxProperties < Keyword
+          include ParseIntLimit
           @max_properties : Int64 = Int64::MAX
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
@@ -533,18 +453,7 @@ module JsonSchemer
           end
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @max_properties = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @max_properties = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'maxProperties' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'maxProperties' must be a number")
-            end
+            @max_properties = parse_int_limit("maxProperties")
             value
           end
 
@@ -559,25 +468,15 @@ module JsonSchemer
 
         # MinProperties keyword
         class MinProperties < Keyword
+          include ParseIntLimit
           @min_properties : Int64 = 0
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object size at #{formatted_instance_location} is less than: #{value}"
           end
 
-          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
-            raw = value.raw
-            if raw.is_a?(Int64)
-              @min_properties = raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                @min_properties = raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword 'minProperties' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword 'minProperties' must be a number")
-            end
+          def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
+            @min_properties = parse_int_limit("minProperties")
             value
           end
 
