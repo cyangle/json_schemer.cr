@@ -333,18 +333,6 @@ module JsonSchemer
 
       target_hash[property] = value
 
-      # 2. Update original instance
-      if orig_ref = context.original_instance_ref
-        begin
-          orig_target = navigate_instance_pointer(orig_ref, instance_ptr)
-          if orig_target && orig_target.raw.is_a?(Hash)
-            orig_target.as_h[property] = value
-          end
-        rescue e : KeyError | IndexError
-          # Ignore navigation errors
-        end
-      end
-
       true
     end
 

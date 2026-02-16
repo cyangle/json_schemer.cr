@@ -59,7 +59,6 @@ module JsonSchemer
     # Custom keywords.
     property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))
 
-
     # Whether to insert default values (not fully implemented).
     property insert_property_defaults : Bool
 
