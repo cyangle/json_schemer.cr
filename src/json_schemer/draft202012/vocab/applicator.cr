@@ -353,7 +353,7 @@ module JsonSchemer
               # This allows hooks to modify data before validation (e.g. casting types)
               if hooks_ran && orig_instance.raw.is_a?(Hash) && instance.raw.is_a?(Hash)
                 instance.as_h.clear
-                instance.as_h.merge!(deep_stringify_keys(orig_instance).as_h)
+                instance.as_h.merge!(orig_instance.clone.as_h)
               end
             end
 
@@ -387,7 +387,7 @@ module JsonSchemer
 
               if hooks_ran && orig_instance.raw.is_a?(Hash) && instance.raw.is_a?(Hash)
                 instance.as_h.clear
-                instance.as_h.merge!(deep_stringify_keys(orig_instance).as_h)
+                instance.as_h.merge!(orig_instance.clone.as_h)
               end
             end
 
