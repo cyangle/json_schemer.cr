@@ -73,41 +73,37 @@ module JsonSchemer
     NOT_KEYWORD_CLASS        = Draft202012::Vocab::Applicator::Not
     PROPERTIES_KEYWORD_CLASS = Draft202012::Vocab::Applicator::Properties
 
-    property! base_uri : URI
-    property! meta_schema : Schema | String
+    property! base_uri : URI?
+    property! meta_schema : Schema | String | Nil
 
-    setter keywords : Hash(String, Keyword.class)?
-    setter keyword_order : Hash(String, Int32)?
+    getter! root : Schema?
+    getter! configuration : Configuration?
+    getter! parsed : Hash(String, Keyword)?
 
-    getter! value : JSON::Any
-    getter! root : Schema
-    getter! configuration : Configuration
-    getter! parsed : Hash(String, Keyword)
-
+    getter value : JSON::Any
     getter parent : Schema | Keyword | Nil
     getter keyword : String = ""
     getter location : Location::Node
 
-    def keywords : Hash(String, Keyword.class)
-      @keywords || (
-        meta = resolved_meta_schema
-        if meta.is_a?(Schema) && meta != self
-          meta.keywords
-        else
-          Draft202012::Vocab::ALL
-        end
-      )
+    setter keywords : Hash(String, Keyword.class)?
+    setter keyword_order : Hash(String, Int32)?
+
+    getter keywords : Hash(String, Keyword.class) do
+      meta = resolved_meta_schema
+      if meta.is_a?(Schema) && meta != self
+        meta.keywords
+      else
+        Draft202012::Vocab::ALL
+      end
     end
 
-    def keyword_order : Hash(String, Int32)
-      @keyword_order || (
-        meta = resolved_meta_schema
-        if meta.is_a?(Schema) && meta != self
-          meta.keyword_order
-        else
-          {} of String => Int32 # Default order
-        end
-      )
+    getter keyword_order : Hash(String, Int32) do
+      meta = resolved_meta_schema
+      if meta.is_a?(Schema) && meta != self
+        meta.keyword_order
+      else
+        {} of String => Int32 # Default order
+      end
     end
 
     @resources : NamedTuple(lexical: Resources, dynamic: Resources)?

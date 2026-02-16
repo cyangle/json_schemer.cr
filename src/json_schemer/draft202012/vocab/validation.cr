@@ -210,33 +210,69 @@ module JsonSchemer
         # Maximum keyword
         class Maximum < NumericLimit
           @limit : Float64 = Float64::INFINITY
-          def compare(value : Float64, limit : Float64) : Bool; value <= limit; end
-          def limit_name : String; "maximum"; end
-          def error_message_relation : String; "greater than"; end
+
+          def compare(value : Float64, limit : Float64) : Bool
+            value <= limit
+          end
+
+          def limit_name : String
+            "maximum"
+          end
+
+          def error_message_relation : String
+            "greater than"
+          end
         end
 
         # ExclusiveMaximum keyword
         class ExclusiveMaximum < NumericLimit
           @limit : Float64 = Float64::INFINITY
-          def compare(value : Float64, limit : Float64) : Bool; value < limit; end
-          def limit_name : String; "exclusiveMaximum"; end
-          def error_message_relation : String; "greater than or equal to"; end
+
+          def compare(value : Float64, limit : Float64) : Bool
+            value < limit
+          end
+
+          def limit_name : String
+            "exclusiveMaximum"
+          end
+
+          def error_message_relation : String
+            "greater than or equal to"
+          end
         end
 
         # Minimum keyword
         class Minimum < NumericLimit
           @limit : Float64 = -Float64::INFINITY
-          def compare(value : Float64, limit : Float64) : Bool; value >= limit; end
-          def limit_name : String; "minimum"; end
-          def error_message_relation : String; "less than"; end
+
+          def compare(value : Float64, limit : Float64) : Bool
+            value >= limit
+          end
+
+          def limit_name : String
+            "minimum"
+          end
+
+          def error_message_relation : String
+            "less than"
+          end
         end
 
         # ExclusiveMinimum keyword
         class ExclusiveMinimum < NumericLimit
           @limit : Float64 = -Float64::INFINITY
-          def compare(value : Float64, limit : Float64) : Bool; value > limit; end
-          def limit_name : String; "exclusiveMinimum"; end
-          def error_message_relation : String; "less than or equal to"; end
+
+          def compare(value : Float64, limit : Float64) : Bool
+            value > limit
+          end
+
+          def limit_name : String
+            "exclusiveMinimum"
+          end
+
+          def error_message_relation : String
+            "less than or equal to"
+          end
         end
 
         # MaxLength keyword
