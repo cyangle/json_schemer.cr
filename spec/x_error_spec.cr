@@ -7,7 +7,7 @@ describe "x-error" do
       "x-error": "custom error message"
     }))
 
-    result = schema.validate(1, output_format: "basic")
+    result = schema.validate(JSON::Any.new(1_i64), output_format: "basic")
     result["error"].as_s.should eq("custom error message")
   end
 
@@ -66,13 +66,13 @@ describe "x-error" do
     # When output_format is basic, the top-level error (if valid=false) is usually from the root schema
     # IF the root schema itself failed.
     # For type mismatch, the root schema fails.
-    result = schema.validate(1, output_format: "basic")
+    result = schema.validate(JSON::Any.new(1_i64), output_format: "basic")
     result["error"].as_s.should eq("schema error")
 
     # Trigger keyword error (minLength)
     # The root schema is valid (it is a string), but minLength keyword fails.
     # In basic output, top level is valid=false, and errors array contains keyword errors.
-    result = schema.validate("abc", output_format: "basic")
+    result = schema.validate(JSON::Any.new("abc"), output_format: "basic")
     result["errors"].as_a.first["error"].as_s.should eq("keyword error")
   end
 
@@ -88,15 +88,15 @@ describe "x-error" do
     }))
 
     # Trigger schema error (type mismatch) - should fallback to * since ^ is missing
-    result = schema.validate(1, output_format: "basic")
+    result = schema.validate(JSON::Any.new(1_i64), output_format: "basic")
     result["error"].as_s.should eq("fallback error")
 
     # Trigger pattern error - should fallback to * since pattern is missing
-    result = schema.validate("bbbbbb", output_format: "basic")
+    result = schema.validate(JSON::Any.new("bbbbbb"), output_format: "basic")
     result["errors"].as_a.first["error"].as_s.should eq("fallback error")
 
     # Trigger minLength error - should use specific message
-    result = schema.validate("a", output_format: "basic")
+    result = schema.validate(JSON::Any.new("a"), output_format: "basic")
     result["errors"].as_a.first["error"].as_s.should eq("keyword error")
   end
 end

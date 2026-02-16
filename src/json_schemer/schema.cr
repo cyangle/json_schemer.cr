@@ -45,22 +45,6 @@ module JsonSchemer
         @access_mode : String? = nil,
       )
       end
-
-      def original_instance(instance_location : Location::Node) : JSON::Any
-        path = Location.resolve(instance_location)
-        tokens = Hana::Pointer.parse(path)
-
-        result = instance
-        tokens.each do |token|
-          case result.raw
-          when Array
-            result = result.as_a[token.to_i]
-          when Hash
-            result = result.as_h[token]
-          end
-        end
-        result
-      end
     end
 
     # Class constants for keyword classes
@@ -71,59 +55,41 @@ module JsonSchemer
     NOT_KEYWORD_CLASS        = Draft202012::Vocab::Applicator::Not
     PROPERTIES_KEYWORD_CLASS = Draft202012::Vocab::Applicator::Properties
 
-    @base_uri : URI?
-    @meta_schema : (Schema | String)?
-    @keywords : Hash(String, Keyword.class)?
-    @keyword_order : Hash(String, Int32)?
-    @value : JSON::Any?
-    @root : Schema?
-    @configuration : Configuration?
-    @parsed : Hash(String, Keyword)?
+    property! base_uri : URI?
+    property! meta_schema : Schema | String | Nil
 
-    property! base_uri : URI
-    property! meta_schema : Schema | String
-    @keywords : Hash(String, Keyword.class)?
-    @keyword_order : Hash(String, Int32)?
-    property! value : JSON::Any
-    property! root : Schema
-    property! configuration : Configuration
-    property! parsed : Hash(String, Keyword)
+    getter! root : Schema?
+    getter! configuration : Configuration?
+    getter! parsed : Hash(String, Keyword)?
 
-    def keywords=(@keywords)
-    end
+    getter value : JSON::Any
+    getter parent : Schema | Keyword | Nil
+    getter keyword : String = ""
+    getter location : Location::Node
 
-    def keyword_order=(@keyword_order)
-    end
+    setter keywords : Hash(String, Keyword.class)?
+    setter keyword_order : Hash(String, Int32)?
 
     def keywords : Hash(String, Keyword.class)
-      @keywords || (
-        meta = @meta_schema
+      @keywords ||= begin
+        meta = resolved_meta_schema
         if meta.is_a?(Schema) && meta != self
           meta.keywords
         else
           Draft202012::Vocab::ALL
         end
-      )
+      end
     end
 
     def keyword_order : Hash(String, Int32)
-      @keyword_order || (
-        meta = @meta_schema
+      @keyword_order ||= begin
+        meta = resolved_meta_schema
         if meta.is_a?(Schema) && meta != self
           meta.keyword_order
         else
           {} of String => Int32 # Default order
         end
-      )
-    end
-
-    getter parent : Schema | Keyword | Nil
-
-    @keyword : String = ""
-    getter location : Location::Node
-
-    def keyword : String
-      @keyword
+      end
     end
 
     @resources : NamedTuple(lexical: Resources, dynamic: Resources)?
@@ -168,9 +134,7 @@ module JsonSchemer
       content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
       content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
       keywords_config : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
-      before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
-      after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
-      insert_property_defaults : Bool | Symbol = false,
+      insert_property_defaults : Bool = false,
       property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
@@ -192,11 +156,11 @@ module JsonSchemer
       # Convert value to JSON::Any
       @value = case value
                when JSON::Any
-                 deep_stringify_keys(value)
+                 value.clone
                when Bool
                  JSON::Any.new(value)
                else
-                 deep_stringify_keys(JSON::Any.new(value.transform_values { |v| v }))
+                 JSON::Any.new(value.transform_values(&.clone))
                end
 
       @parent = parent
@@ -221,8 +185,6 @@ module JsonSchemer
         content_encodings: content_encodings || base_config.content_encodings,
         content_media_types: content_media_types || base_config.content_media_types,
         keywords: keywords_config || base_config.keywords,
-        before_property_validation: before_property_validation || base_config.before_property_validation,
-        after_property_validation: after_property_validation || base_config.after_property_validation,
         insert_property_defaults: insert_property_defaults,
         property_default_resolver: property_default_resolver || base_config.property_default_resolver,
         ref_resolver: ref_resolver || base_config.ref_resolver,
@@ -232,7 +194,6 @@ module JsonSchemer
         access_mode: access_mode || base_config.access_mode
       )
       @configuration = config
-      # debugger if meta_schema == "https://spec.openapis.org/oas/3.1/dialect/2024-11-10"
 
       @base_uri = config.base_uri
       @meta_schema = config.meta_schema
@@ -266,15 +227,16 @@ module JsonSchemer
 
     # Validates an instance against the schema and returns true if valid.
     #
-    # The instance can be a `JSON::Any`, `Hash`, `Array`, or primitive types.
+    # The instance must be a `JSON::Any` or a JSON `String`.
     #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
-    # schema.valid?(10)   # => true
-    # schema.valid?("10") # => false
+    # schema.valid?(JSON::Any.new(10_i64)) # => true
+    # schema.valid?("10")                  # => true (parsed as 10)
+    # schema.valid?("\"10\"")              # => false (parsed as "10")
     # ```
     def valid?(
-      instance,
+      instance : JSON::Any | String,
       resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     ) : Bool
@@ -296,32 +258,26 @@ module JsonSchemer
     #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
-    # result = schema.validate("invalid")
+    # result = schema.validate("\"invalid\"")
     # puts result["valid"]  # => false
     # puts result["errors"] # => Array of errors
     # ```
     def validate(
-      instance,
+      instance : JSON::Any | String,
       output_format : String? = nil,
       resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     ) : Hash(String, JSON::Any)
       resolved_output_format = output_format || configuration.output_format
-      # Note: resolve_enumerators is available for future use but not currently implemented
-      _ = resolve_enumerators.nil? ? configuration.resolve_enumerators : resolve_enumerators
+      # Note: resolve_enumerators is accepted for API compatibility but is a no-op in Crystal.
+      # Crystal does not have Ruby's lazy Enumerator type, so there is nothing to resolve.
       resolved_access_mode = access_mode || configuration.access_mode
+
       # Convert instance to JSON::Any
-      json_instance = case instance
-                      when JSON::Any
-                        deep_stringify_keys(instance)
-                      when Hash
-                        deep_stringify_keys(JSON.parse(instance.to_json))
-                      when Array
-                        deep_stringify_keys(JSON.parse(instance.to_json))
-                      when String, Number, Bool, Nil
-                        JSON::Any.new(instance)
+      json_instance = if instance.is_a?(JSON::Any)
+                        instance
                       else
-                        JSON.parse(instance.to_json)
+                        JSON.parse(instance)
                       end
 
       instance_location = Location.root
@@ -329,11 +285,34 @@ module JsonSchemer
         json_instance,
         [] of Schema,
         nil,
-        resolved_output_format == "flag",
+        resolved_output_format == "flag" && !configuration.insert_property_defaults,
         resolved_access_mode
       )
 
       result = validate_instance(json_instance, instance_location, context)
+
+      # Insert property defaults if configured
+      insert_defaults = configuration.insert_property_defaults
+      if insert_defaults
+        defaults_inserted = if pdr = configuration.property_default_resolver
+                              result.insert_property_defaults(context) { |value, property, results| pdr.call(value, property, results) }
+                            else
+                              result.insert_property_defaults(context)
+                            end
+
+        if defaults_inserted
+          # Re-validate after inserting defaults
+          context = Context.new(
+            json_instance,
+            [] of Schema,
+            nil,
+            resolved_output_format == "flag",
+            resolved_access_mode
+          )
+          result = validate_instance(json_instance, instance_location, context)
+        end
+      end
+
       result.output(resolved_output_format)
     end
 
@@ -749,14 +728,6 @@ module JsonSchemer
       io << " @value=" << @value.inspect
       io << " @keyword=" << @keyword.inspect
       io << ">"
-    end
-
-    def keywords : Hash(String, Keyword.class)
-      @keywords || resolved_meta_schema.keywords
-    end
-
-    def keyword_order : Hash(String, Int32)
-      @keyword_order || resolved_meta_schema.keyword_order
     end
 
     private def parse

@@ -15,9 +15,7 @@ module JsonSchemer
       content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
       content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
       keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Bool | Array(String)))? = nil,
-      before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
-      after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
-      insert_property_defaults : Bool | Symbol = false,
+      insert_property_defaults : Bool = false,
       property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
@@ -40,7 +38,7 @@ module JsonSchemer
       end
 
       @schema = Schema.new(
-        JSON::Any.new(@document.transform_values { |v| v }),
+        JSON::Any.new(@document),
         meta_schema: resolved_meta_schema,
         base_uri: base_uri,
         vocabulary: vocabulary,
@@ -49,8 +47,6 @@ module JsonSchemer
         content_encodings: content_encodings,
         content_media_types: content_media_types,
         keywords_config: keywords,
-        before_property_validation: before_property_validation,
-        after_property_validation: after_property_validation,
         insert_property_defaults: insert_property_defaults,
         property_default_resolver: property_default_resolver,
         ref_resolver: ref_resolver,
@@ -82,7 +78,7 @@ module JsonSchemer
     # end
     # ```
     def valid? : Bool
-      @document_schema.valid?(JSON::Any.new(@document.transform_values { |v| v }))
+      @document_schema.valid?(JSON::Any.new(@document))
     end
 
     # Validates the OpenAPI document and returns the validation result.
@@ -97,7 +93,7 @@ module JsonSchemer
     # end
     # ```
     def validate(output_format : String = "classic") : Hash(String, JSON::Any)
-      @document_schema.validate(JSON::Any.new(@document.transform_values { |v| v }), output_format: output_format)
+      @document_schema.validate(JSON::Any.new(@document), output_format: output_format)
     end
 
     # Resolves a reference URI within the OpenAPI document.
@@ -111,7 +107,7 @@ module JsonSchemer
       if value.starts_with?("#/")
         path = value[1..]
         begin
-          target = Hana::Pointer.new(path).eval(JSON::Any.new(@document.transform_values { |v| v }))
+          target = Hana::Pointer.new(path).eval(JSON::Any.new(@document))
           Schema.new(
             target,
             root: @schema,

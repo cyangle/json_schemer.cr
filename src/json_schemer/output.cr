@@ -31,8 +31,8 @@ module JsonSchemer
     end
 
     # Escape keyword for JSON pointer
-    def escaped_keyword : String
-      @escaped_keyword ||= Location.escape_json_pointer_token(keyword)
+    getter escaped_keyword : String do
+      Location.escape_json_pointer_token(keyword)
     end
 
     # Join location with keyword
@@ -43,22 +43,6 @@ module JsonSchemer
     # Fragment encode a location
     def fragment_encode(location : String) : String
       Format.percent_encode(location, FRAGMENT_ENCODE_REGEX)
-    end
-
-    # Deep stringify keys
-    def deep_stringify_keys(obj : JSON::Any) : JSON::Any
-      case obj.raw
-      when Hash
-        result = {} of String => JSON::Any
-        obj.as_h.each do |key, value|
-          result[key.to_s] = deep_stringify_keys(value)
-        end
-        JSON::Any.new(result)
-      when Array
-        JSON::Any.new(obj.as_a.map { |item| deep_stringify_keys(item) })
-      else
-        obj
-      end
     end
 
     # Abstract methods that implementers should provide

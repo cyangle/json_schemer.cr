@@ -141,8 +141,6 @@ module JsonSchemer
     content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
     content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
     keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
-    before_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
-    after_property_validation : Array(Proc(JSON::Any, String, JSON::Any, JSON::Any, Nil))? = nil,
     insert_property_defaults : Bool | Symbol = false,
     property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
     ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
@@ -162,8 +160,6 @@ module JsonSchemer
       content_encodings: content_encodings,
       content_media_types: content_media_types,
       keywords_config: keywords,
-      before_property_validation: before_property_validation,
-      after_property_validation: after_property_validation,
       insert_property_defaults: insert_property_defaults,
       property_default_resolver: property_default_resolver,
       ref_resolver: resolved_ref_resolver,
@@ -191,7 +187,7 @@ module JsonSchemer
   ) : Bool
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
     meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver)
-    meta.valid?(resolved_schema)
+    meta.valid?(JSON::Any.new(resolved_schema))
   end
 
   # Validates the given schema definition against its meta-schema and returns the validation result.
@@ -212,7 +208,7 @@ module JsonSchemer
   ) : Hash(String, JSON::Any)
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
     meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver)
-    meta.validate(resolved_schema, output_format: output_format)
+    meta.validate(JSON::Any.new(resolved_schema), output_format: output_format)
   end
 
   # Get draft 2020-12 meta schema
