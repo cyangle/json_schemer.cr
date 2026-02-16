@@ -32,7 +32,6 @@ module JsonSchemer
     # Context struct for validation state
     class Context
       property instance : JSON::Any
-      property original_instance_ref : JSON::Any?
       property dynamic_scope : Array(Schema)
       property adjacent_results : Hash(Keyword.class, Result)?
       property short_circuit : Bool
@@ -44,7 +43,6 @@ module JsonSchemer
         @adjacent_results : Hash(Keyword.class, Result)? = nil,
         @short_circuit : Bool = false,
         @access_mode : String? = nil,
-        @original_instance_ref : JSON::Any? = nil,
       )
       end
 
@@ -59,7 +57,7 @@ module JsonSchemer
           break unless current
         end
 
-        result = original_instance_ref || instance
+        result = instance
 
         # Tokens are collected in reverse order (leaf -> root), so iterate in reverse (root -> leaf)
         tokens.reverse_each do |token|
@@ -299,13 +297,10 @@ module JsonSchemer
       # Crystal does not have Ruby's lazy Enumerator type, so there is nothing to resolve.
       resolved_access_mode = access_mode || configuration.access_mode
 
-      # Keep reference to the original instance for insert_property_defaults mutation
-      original_ref = instance.is_a?(JSON::Any) ? instance : nil
-
       # Convert instance to JSON::Any
       json_instance = case instance
                       when JSON::Any
-                        instance.clone
+                        instance
                       when Hash
                         JSON.parse(instance.to_json)
                       when Array
@@ -322,8 +317,7 @@ module JsonSchemer
         [] of Schema,
         nil,
         resolved_output_format == "flag" && !configuration.insert_property_defaults,
-        resolved_access_mode,
-        original_ref
+        resolved_access_mode
       )
 
       result = validate_instance(json_instance, instance_location, context)
@@ -344,8 +338,7 @@ module JsonSchemer
             [] of Schema,
             nil,
             resolved_output_format == "flag",
-            resolved_access_mode,
-            original_ref
+            resolved_access_mode
           )
           result = validate_instance(json_instance, instance_location, context)
         end

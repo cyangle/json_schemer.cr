@@ -45,7 +45,6 @@ module JsonSchemer
       Format.percent_encode(location, FRAGMENT_ENCODE_REGEX)
     end
 
-
     # Abstract methods that implementers should provide
     abstract def keyword : String
     abstract def schema : Schema
