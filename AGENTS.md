@@ -162,15 +162,40 @@ require "./json_schemer/errors"
   - `additionalProperties` -> `AdditionalProperties`
 
 ### Property Macros
-- Use `property`, `getter`, `setter` macros instead of manual method definitions where possible.
-- Use `property!` / `getter!` for non-nilable properties that are initialized later (but be careful with safety).
-- Use block syntax for lazy initialization with `getter`:
+Use built-in macros to define instance variables and accessors concisely.
+
+- **Standard Accessors**:
+  - `getter name` (Reader): Defines `@name` and `def name`.
+  - `setter name` (Writer): Defines `@name` and `def name=(value)`.
+  - `property name` (Both): Defines `@name`, `def name`, and `def name=(value)`.
+
+- **Type & Initialization**:
+  - `getter name : String` (Typed)
+  - `getter name : String = "default"` (Initial value)
+  - `property name : Int32 = 0` (Combined)
+
+- **Lazy Initialization**:
+  - Use block syntax with `getter` for values calculated on first access.
   ```crystal
-  getter foo : String do
-    calculate_foo
+  getter lazy_val : String do
+    complex_calculation
   end
   ```
-- Use `property?` / `getter?` for boolean predicates.
+
+- **Nil-safe Accessors (`!` suffix)**:
+  - Use `getter!` / `property!` for nilable instance variables that should be treated as non-nil (raises `NilAssertionError` if nil).
+  - Useful for late initialization.
+  ```crystal
+  # @name is String?, but name returns String (raises if nil)
+  getter! name : String
+  ```
+
+- **Boolean Predicates (`?` suffix)**:
+  - Use `getter?` / `property?` for boolean variables.
+  - Generates `def name?` instead of `def name`.
+  ```crystal
+  getter? valid : Bool  # defines def valid? : Bool
+  ```
 
 ### Type Annotations
 - Always annotate method return types for public methods
