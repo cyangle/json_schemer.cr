@@ -18,8 +18,12 @@ module JsonSchemer
 
         # Default keyword
         class Default < Keyword
+          def value : JSON::Any
+            @value.clone
+          end
+
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
-            result(instance, instance_location, location, true, result_annotation: value.clone)
+            result(instance, instance_location, location, true, result_annotation: value)
           end
         end
       end
