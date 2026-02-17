@@ -892,6 +892,45 @@ write_schema = JsonSchemer.schema(schema_hash, access_mode: "write")
 write_schema.valid?(JSON.parse(%q({"password": "secret"})))  # => true
 ```
 
+## Property Default Resolver
+
+The `property_default_resolver` option allows for conditional injection of default values. This is useful when you only want to insert defaults for specific properties or based on custom logic.
+
+To use it, you must also set `insert_property_defaults: true`.
+
+```crystal
+schema = JsonSchemer.schema(
+  %q({
+    "properties": {
+      "a": { "type": "string", "default": "foo" },
+      "b": { "type": "string", "default": "bar" }
+    }
+  }),
+  insert_property_defaults: true,
+  property_default_resolver: ->(
+    instance : JSON::Any,
+    property_name : String,
+    results : Array(Tuple(JsonSchemer::Result, Bool))
+  ) {
+    # Only insert default for property "a"
+    property_name == "a"
+  }
+)
+
+data = JSON.parse(%q({}))
+schema.validate(data)
+
+data.as_h["a"].as_s  # => "foo"
+data.as_h.has_key?("b") # => false
+```
+
+The resolver receives:
+- `instance`: The object instance being validated.
+- `property_name`: The name of the property.
+- `results`: An array of validation results for that property.
+
+It should return `true` to allow the default value to be inserted, or `false` to skip it.
+
 ## ECMA-262 Regex Compatibility
 
 ```crystal
