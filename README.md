@@ -76,6 +76,7 @@ See the full [Usage Guide](USAGE.md) for detailed examples including:
 - Format validation and custom format validators
 - Custom keyword validators
 - OpenAPI 3.1 support
+- OpenAPI 3.2 support
 - Access modes (`readOnly`/`writeOnly`)
 - ECMA-262 regex compatibility
 
@@ -224,21 +225,20 @@ This section provides a complete reference for all configuration options availab
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `base_uri` | `URI?` | `nil` (auto-generated) | Base URI for resolving relative `$ref` URIs |
-| `meta_schema` | `Schema \| String \| Nil` | `"https://json-schema.org/draft/2020-12/schema"` | Meta-schema for validation |
+| `base_uri` | `URI` | `nil` (auto-generated) | Base URI for resolving relative `$ref` URIs |
+| `meta_schema` | `Schema \| String` | `"https://json-schema.org/draft/2020-12/schema"` | Meta-schema for validation |
 | `vocabulary` | `Hash(String, Bool)?` | `nil` | Custom vocabulary configuration |
-| `format` | `Bool?` | `true` (enabled by default) | Enable format validation as assertion |
-| `formats` | `Hash(String, FormatValidator)?` | `{}` | Custom format validators |
-| `content_encodings` | `Hash(String, ContentEncodingValidator)?` | `{}` | Custom content encoding validators |
-| `content_media_types` | `Hash(String, ContentMediaTypeValidator)?` | `{}` | Custom content media type validators |
-| `keywords` | `Hash(String, Proc)?` | `{}` | Custom keyword validators |
-| `ref_resolver` | `Proc(URI, JSONHash?) \| String \| Nil` | Raises `UnknownRef` | Resolver for external `$ref` URIs |
-| `regexp_resolver` | `Proc(String, Regex?) \| String \| Nil` | `"ruby"` | Regex pattern resolver (`"ruby"` or `"ecma"`) |
-| `output_format` | `String?` | `"classic"` | Output format: `"flag"`, `"basic"`, or `"classic"` |
+| `format` | `Bool` | `true` | Enable format validation as assertion |
+| `formats` | `Hash(String, FormatValidator)` | `{}` | Custom format validators |
+| `content_encodings` | `Hash(String, ContentEncodingValidator)` | `{}` | Custom content encoding validators |
+| `content_media_types` | `Hash(String, ContentMediaTypeValidator)` | `{}` | Custom content media type validators |
+| `keywords` | `Hash(String, Proc)` | `{}` | Custom keyword validators |
+| `ref_resolver` | `Proc(URI, JSONHash?) \| String` | Raises `UnknownRef` | Resolver for external `$ref` URIs |
+| `regexp_resolver` | `Proc(String, Regex?) \| String` | `"ruby"` | Regex pattern resolver (`"ruby"` or `"ecma"`) |
+| `output_format` | `String` | `"classic"` | Output format: `"flag"`, `"basic"`, or `"classic"` |
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
 | `insert_property_defaults` | `Bool` | `false` | Insert default values (annotation only) |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
-| `resolve_enumerators` | `Bool?` | `false` | Whether to resolve enumerators during validation |
 
 ### Detailed Option Descriptions
 
@@ -519,11 +519,7 @@ schema.valid?(JSON::Any.new("hello"))   # => false
 
 #### `property_default_resolver`
 
-Custom resolver for property defaults. This advanced option allows control over how default values are resolved. **Note:** This option is accepted for API compatibility but is not fully implemented.
-
-#### `resolve_enumerators`
-
-When set to `true`, allows resolving enumerators during validation. Defaults to `false`. **Note:** This option is accepted for API compatibility but behavior may be limited.
+Custom resolver for property defaults. This advanced option allows control over how default values are resolved. See [USAGE.md](USAGE.md#property-default-resolver) for details.
 
 
 ### Global Configuration
@@ -560,9 +556,6 @@ While ECMA-262 regex patterns are supported via the `regexp_resolver: "ecma"` op
 Some edge cases in internationalized hostname validation may differ due to UTS#46 vs IDNA2008 implementation differences. Specifically:
 - Characters like U+302E (Hangul single dot tone mark)
 - Some "Exceptions that are DISALLOWED" characters
-
-### Other API Compatibility Options
-The `property_default_resolver` and `resolve_enumerators` options are accepted for API compatibility but may have limited functionality.
 
 ## Development
 

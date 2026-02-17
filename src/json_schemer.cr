@@ -146,7 +146,6 @@ module JsonSchemer
     ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
     regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
     output_format : String? = nil,
-    resolve_enumerators : Bool? = nil,
     access_mode : String? = nil,
   ) : Schema
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
@@ -165,7 +164,6 @@ module JsonSchemer
       ref_resolver: resolved_ref_resolver,
       regexp_resolver: regexp_resolver,
       output_format: output_format,
-      resolve_enumerators: resolve_enumerators,
       access_mode: access_mode
     )
   end
