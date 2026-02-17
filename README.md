@@ -519,7 +519,7 @@ schema.valid?(JSON::Any.new("hello"))   # => false
 
 #### `property_default_resolver`
 
-Custom resolver for property defaults. This advanced option allows control over how default values are resolved. **Note:** This option is accepted for API compatibility but is not fully implemented.
+Custom resolver for property defaults. This advanced option allows control over how default values are resolved. See [USAGE.md](USAGE.md#property-default-resolver) for details.
 
 
 ### Global Configuration
@@ -556,9 +556,6 @@ While ECMA-262 regex patterns are supported via the `regexp_resolver: "ecma"` op
 Some edge cases in internationalized hostname validation may differ due to UTS#46 vs IDNA2008 implementation differences. Specifically:
 - Characters like U+302E (Hangul single dot tone mark)
 - Some "Exceptions that are DISALLOWED" characters
-
-### Other API Compatibility Options
-The `property_default_resolver` option is accepted for API compatibility but may have limited functionality.
 
 ## Development
 

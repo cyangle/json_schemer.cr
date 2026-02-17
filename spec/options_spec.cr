@@ -344,6 +344,90 @@ describe "Configuration Options" do
       schema.valid?(JSON.parse(%q({"name": "John"}))).should be_true
       schema.valid?(JSON.parse(%q({"name": 123}))).should be_false
     end
+
+    it "conditionally inserts defaults based on resolver return value" do
+      resolver = ->(value : JSON::Any, property : String, _results : Array(Tuple(JsonSchemer::Result, Bool))) {
+        # Only insert defaults for "foo", skip "bar"
+        property == "foo"
+      }
+
+      schema = JsonSchemer.schema(
+        %q({
+          "properties": {
+            "foo": {"type": "string", "default": "default_foo"},
+            "bar": {"type": "string", "default": "default_bar"}
+          }
+        }),
+        insert_property_defaults: true,
+        property_default_resolver: resolver
+      )
+
+      instance = JSON.parse("{}")
+      schema.validate(instance)
+
+      instance.as_h.has_key?("foo").should be_true
+      instance["foo"].as_s.should eq("default_foo")
+
+      instance.as_h.has_key?("bar").should be_false
+    end
+
+    it "passes correct arguments to the resolver" do
+      captured_args = [] of Tuple(JSON::Any, String)
+
+      resolver = ->(value : JSON::Any, property : String, _results : Array(Tuple(JsonSchemer::Result, Bool))) {
+        captured_args << {value, property}
+        true
+      }
+
+      schema = JsonSchemer.schema(
+        %q({
+          "properties": {
+            "a": {"default": 1},
+            "b": {"default": 2}
+          }
+        }),
+        insert_property_defaults: true,
+        property_default_resolver: resolver
+      )
+
+      instance = JSON.parse("{}")
+      schema.validate(instance)
+
+      # Sort by property name to ensure deterministic order check
+      captured_args.sort_by! { |arg| arg[1] }
+
+      captured_args.size.should eq(2)
+      captured_args[0][0].as_i.should eq(1)
+      captured_args[0][1].should eq("a")
+      captured_args[1][0].as_i.should eq(2)
+      captured_args[1][1].should eq("b")
+    end
+
+    it "allows complex logic using results argument" do
+      # This test simulates a scenario where we check if the path to the default was valid
+      # Note: The `results` argument contains the validation path results.
+      # For a simple case, the path should be valid.
+
+      resolver = ->(_value : JSON::Any, _property : String, results : Array(Tuple(JsonSchemer::Result, Bool))) {
+        # Check if the path is valid (it should be for this simple schema)
+        results.all? { |(_res, valid)| valid }
+      }
+
+      schema = JsonSchemer.schema(
+        %q({
+          "properties": {
+            "baz": {"default": "valid_path"}
+          }
+        }),
+        insert_property_defaults: true,
+        property_default_resolver: resolver
+      )
+
+      instance = JSON.parse("{}")
+      schema.validate(instance)
+
+      instance["baz"]?.should eq("valid_path")
+    end
   end
 
   describe "global configuration" do
