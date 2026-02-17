@@ -20,7 +20,6 @@ module JsonSchemer
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
       output_format : String? = nil,
-      resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     )
       @document = document
@@ -52,7 +51,6 @@ module JsonSchemer
         ref_resolver: ref_resolver,
         regexp_resolver: regexp_resolver,
         output_format: output_format,
-        resolve_enumerators: resolve_enumerators,
         access_mode: access_mode
       )
     end

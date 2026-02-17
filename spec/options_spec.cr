@@ -346,67 +346,6 @@ describe "Configuration Options" do
     end
   end
 
-  describe "resolve_enumerators option" do
-    it "accepts resolve_enumerators: true option" do
-      schema = JsonSchemer.schema(
-        %q({"type": "string"}),
-        resolve_enumerators: true
-      )
-
-      schema.should be_a(JsonSchemer::Schema)
-    end
-
-    it "accepts resolve_enumerators: false option" do
-      schema = JsonSchemer.schema(
-        %q({"type": "string"}),
-        resolve_enumerators: false
-      )
-
-      schema.should be_a(JsonSchemer::Schema)
-    end
-
-    it "stores resolve_enumerators in configuration" do
-      schema = JsonSchemer.schema(
-        %q({"type": "string"}),
-        resolve_enumerators: true
-      )
-
-      schema.configuration.resolve_enumerators.should be_true
-    end
-
-    it "defaults to false" do
-      schema = JsonSchemer.schema(%q({"type": "string"}))
-      schema.configuration.resolve_enumerators.should be_false
-    end
-
-    it "can be passed to valid? method" do
-      schema = JsonSchemer.schema(%q({"type": "string"}))
-
-      # Should not raise error when passing resolve_enumerators to valid?
-      schema.valid?(JSON::Any.new("hello"), resolve_enumerators: true).should be_true
-      schema.valid?(JSON::Any.new("hello"), resolve_enumerators: false).should be_true
-    end
-
-    it "validates normally regardless of resolve_enumerators setting" do
-      schema_with_true = JsonSchemer.schema(
-        %q({"type": "integer", "minimum": 0}),
-        resolve_enumerators: true
-      )
-
-      schema_with_false = JsonSchemer.schema(
-        %q({"type": "integer", "minimum": 0}),
-        resolve_enumerators: false
-      )
-
-      # Both should validate the same way
-      schema_with_true.valid?(JSON::Any.new(5_i64)).should be_true
-      schema_with_true.valid?(JSON::Any.new(-1_i64)).should be_false
-
-      schema_with_false.valid?(JSON::Any.new(5_i64)).should be_true
-      schema_with_false.valid?(JSON::Any.new(-1_i64)).should be_false
-    end
-  end
-
   describe "global configuration" do
     it "accepts keywords in global configuration" do
       # Store original to restore later
@@ -424,20 +363,6 @@ describe "Configuration Options" do
         # Restore original
         JsonSchemer.configuration.keywords.clear
         original_keywords.each { |k, v| JsonSchemer.configuration.keywords[k] = v }
-      end
-    end
-
-    it "accepts resolve_enumerators in global configuration" do
-      original = JsonSchemer.configuration.resolve_enumerators
-
-      begin
-        JsonSchemer.configure do |config|
-          config.resolve_enumerators = true
-        end
-
-        JsonSchemer.configuration.resolve_enumerators.should be_true
-      ensure
-        JsonSchemer.configuration.resolve_enumerators = original
       end
     end
   end
