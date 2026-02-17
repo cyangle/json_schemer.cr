@@ -139,7 +139,6 @@ module JsonSchemer
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
       output_format : String? = nil,
-      resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     )
       @location = if parent
@@ -190,7 +189,6 @@ module JsonSchemer
         ref_resolver: ref_resolver || base_config.ref_resolver,
         regexp_resolver: regexp_resolver || base_config.regexp_resolver,
         output_format: output_format || base_config.output_format,
-        resolve_enumerators: resolve_enumerators.nil? ? base_config.resolve_enumerators : resolve_enumerators,
         access_mode: access_mode || base_config.access_mode
       )
       @configuration = config
@@ -237,13 +235,11 @@ module JsonSchemer
     # ```
     def valid?(
       instance : JSON::Any | String,
-      resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     ) : Bool
       validate(
         instance,
         output_format: "flag",
-        resolve_enumerators: resolve_enumerators.nil? ? configuration.resolve_enumerators : resolve_enumerators,
         access_mode: access_mode || configuration.access_mode
       )["valid"].as_bool
     end
@@ -265,12 +261,9 @@ module JsonSchemer
     def validate(
       instance : JSON::Any | String,
       output_format : String? = nil,
-      resolve_enumerators : Bool? = nil,
       access_mode : String? = nil,
     ) : Hash(String, JSON::Any)
       resolved_output_format = output_format || configuration.output_format
-      # Note: resolve_enumerators is accepted for API compatibility but is a no-op in Crystal.
-      # Crystal does not have Ruby's lazy Enumerator type, so there is nothing to resolve.
       resolved_access_mode = access_mode || configuration.access_mode
 
       # Convert instance to JSON::Any

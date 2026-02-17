@@ -239,7 +239,6 @@ This section provides a complete reference for all configuration options availab
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
 | `insert_property_defaults` | `Bool` | `false` | Insert default values (annotation only) |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
-| `resolve_enumerators` | `Bool` | `false` | Whether to resolve enumerators during validation |
 
 ### Detailed Option Descriptions
 
@@ -522,10 +521,6 @@ schema.valid?(JSON::Any.new("hello"))   # => false
 
 Custom resolver for property defaults. This advanced option allows control over how default values are resolved. **Note:** This option is accepted for API compatibility but is not fully implemented.
 
-#### `resolve_enumerators`
-
-When set to `true`, allows resolving enumerators during validation. Defaults to `false`. **Note:** This option is accepted for API compatibility but behavior may be limited.
-
 
 ### Global Configuration
 
@@ -563,7 +558,7 @@ Some edge cases in internationalized hostname validation may differ due to UTS#4
 - Some "Exceptions that are DISALLOWED" characters
 
 ### Other API Compatibility Options
-The `property_default_resolver` and `resolve_enumerators` options are accepted for API compatibility but may have limited functionality.
+The `property_default_resolver` option is accepted for API compatibility but may have limited functionality.
 
 ## Development
 

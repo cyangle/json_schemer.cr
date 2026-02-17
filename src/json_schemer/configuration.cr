@@ -77,9 +77,6 @@ module JsonSchemer
     # Default is "classic".
     property output_format : String
 
-    # Whether to resolve enumerators.
-    property resolve_enumerators : Bool
-
     # Access mode ("read" or "write") for readOnly/writeOnly validation.
     property access_mode : String?
 
@@ -98,7 +95,6 @@ module JsonSchemer
       @ref_resolver : Proc(URI, JSONHash?) | String = DEFAULT_REF_RESOLVER,
       @regexp_resolver : Proc(String, Regex?) | String = "ruby",
       @output_format : String = "classic",
-      @resolve_enumerators : Bool = false,
       @access_mode : String? = nil,
     )
     end
@@ -118,7 +114,6 @@ module JsonSchemer
         ref_resolver: options[:ref_resolver]? || @ref_resolver,
         regexp_resolver: options[:regexp_resolver]? || @regexp_resolver,
         output_format: options[:output_format]? || @output_format,
-        resolve_enumerators: options.has_key?(:resolve_enumerators) ? options[:resolve_enumerators].as(Bool) : @resolve_enumerators,
         access_mode: options[:access_mode]? || @access_mode
       )
     end
