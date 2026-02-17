@@ -33,17 +33,17 @@ module JsonSchemer
       "application/json" => Content::JSON_MEDIA_TYPE,
     } of String => Content::ContentMediaTypeValidator
 
-    SCHEMA = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/schema.json") }})
+    SCHEMA = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/schema.json") }})
 
     module Meta
-      CORE                     = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/core.json") }})
-      APPLICATOR               = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/applicator.json") }})
-      UNEVALUATED              = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/unevaluated.json") }})
-      VALIDATION               = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/validation.json") }})
-      META_DATA_SCHEMA         = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/meta-data.json") }})
-      FORMAT_ANNOTATION_SCHEMA = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/format-annotation.json") }})
-      FORMAT_ASSERTION_SCHEMA  = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/format-assertion.json") }})
-      CONTENT_SCHEMA           = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2012/meta/content.json") }})
+      CORE                     = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/core.json") }})
+      APPLICATOR               = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/applicator.json") }})
+      UNEVALUATED              = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/unevaluated.json") }})
+      VALIDATION               = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/validation.json") }})
+      META_DATA_SCHEMA         = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/meta-data.json") }})
+      FORMAT_ANNOTATION_SCHEMA = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/format-annotation.json") }})
+      FORMAT_ASSERTION_SCHEMA  = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/format-assertion.json") }})
+      CONTENT_SCHEMA           = JSONHash.from_json({{ read_file("#{__DIR__}/../../../data/jss/draft/2020-12/meta/content.json") }})
 
       SCHEMAS = {
         URI.parse("https://json-schema.org/draft/2020-12/meta/core")              => CORE,
