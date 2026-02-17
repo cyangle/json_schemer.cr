@@ -344,66 +344,89 @@ describe "Configuration Options" do
       schema.valid?(JSON.parse(%q({"name": "John"}))).should be_true
       schema.valid?(JSON.parse(%q({"name": 123}))).should be_false
     end
-  end
 
-  describe "resolve_enumerators option" do
-    it "accepts resolve_enumerators: true option" do
+    it "conditionally inserts defaults based on resolver return value" do
+      resolver = ->(value : JSON::Any, property : String, _results : Array(Tuple(JsonSchemer::Result, Bool))) {
+        # Only insert defaults for "foo", skip "bar"
+        property == "foo"
+      }
+
       schema = JsonSchemer.schema(
-        %q({"type": "string"}),
-        resolve_enumerators: true
+        %q({
+          "properties": {
+            "foo": {"type": "string", "default": "default_foo"},
+            "bar": {"type": "string", "default": "default_bar"}
+          }
+        }),
+        insert_property_defaults: true,
+        property_default_resolver: resolver
       )
 
-      schema.should be_a(JsonSchemer::Schema)
+      instance = JSON.parse("{}")
+      schema.validate(instance)
+
+      instance.as_h.has_key?("foo").should be_true
+      instance["foo"].as_s.should eq("default_foo")
+
+      instance.as_h.has_key?("bar").should be_false
     end
 
-    it "accepts resolve_enumerators: false option" do
+    it "passes correct arguments to the resolver" do
+      captured_args = [] of Tuple(JSON::Any, String)
+
+      resolver = ->(value : JSON::Any, property : String, _results : Array(Tuple(JsonSchemer::Result, Bool))) {
+        captured_args << {value, property}
+        true
+      }
+
       schema = JsonSchemer.schema(
-        %q({"type": "string"}),
-        resolve_enumerators: false
+        %q({
+          "properties": {
+            "a": {"default": 1},
+            "b": {"default": 2}
+          }
+        }),
+        insert_property_defaults: true,
+        property_default_resolver: resolver
       )
 
-      schema.should be_a(JsonSchemer::Schema)
+      instance = JSON.parse("{}")
+      schema.validate(instance)
+
+      # Sort by property name to ensure deterministic order check
+      captured_args.sort_by! { |arg| arg[1] }
+
+      captured_args.size.should eq(2)
+      captured_args[0][0].as_i.should eq(1)
+      captured_args[0][1].should eq("a")
+      captured_args[1][0].as_i.should eq(2)
+      captured_args[1][1].should eq("b")
     end
 
-    it "stores resolve_enumerators in configuration" do
+    it "allows complex logic using results argument" do
+      # This test simulates a scenario where we check if the path to the default was valid
+      # Note: The `results` argument contains the validation path results.
+      # For a simple case, the path should be valid.
+
+      resolver = ->(_value : JSON::Any, _property : String, results : Array(Tuple(JsonSchemer::Result, Bool))) {
+        # Check if the path is valid (it should be for this simple schema)
+        results.all? { |(_res, valid)| valid }
+      }
+
       schema = JsonSchemer.schema(
-        %q({"type": "string"}),
-        resolve_enumerators: true
+        %q({
+          "properties": {
+            "baz": {"default": "valid_path"}
+          }
+        }),
+        insert_property_defaults: true,
+        property_default_resolver: resolver
       )
 
-      schema.configuration.resolve_enumerators.should be_true
-    end
+      instance = JSON.parse("{}")
+      schema.validate(instance)
 
-    it "defaults to false" do
-      schema = JsonSchemer.schema(%q({"type": "string"}))
-      schema.configuration.resolve_enumerators.should be_false
-    end
-
-    it "can be passed to valid? method" do
-      schema = JsonSchemer.schema(%q({"type": "string"}))
-
-      # Should not raise error when passing resolve_enumerators to valid?
-      schema.valid?(JSON::Any.new("hello"), resolve_enumerators: true).should be_true
-      schema.valid?(JSON::Any.new("hello"), resolve_enumerators: false).should be_true
-    end
-
-    it "validates normally regardless of resolve_enumerators setting" do
-      schema_with_true = JsonSchemer.schema(
-        %q({"type": "integer", "minimum": 0}),
-        resolve_enumerators: true
-      )
-
-      schema_with_false = JsonSchemer.schema(
-        %q({"type": "integer", "minimum": 0}),
-        resolve_enumerators: false
-      )
-
-      # Both should validate the same way
-      schema_with_true.valid?(JSON::Any.new(5_i64)).should be_true
-      schema_with_true.valid?(JSON::Any.new(-1_i64)).should be_false
-
-      schema_with_false.valid?(JSON::Any.new(5_i64)).should be_true
-      schema_with_false.valid?(JSON::Any.new(-1_i64)).should be_false
+      instance["baz"]?.should eq("valid_path")
     end
   end
 
@@ -424,20 +447,6 @@ describe "Configuration Options" do
         # Restore original
         JsonSchemer.configuration.keywords.clear
         original_keywords.each { |k, v| JsonSchemer.configuration.keywords[k] = v }
-      end
-    end
-
-    it "accepts resolve_enumerators in global configuration" do
-      original = JsonSchemer.configuration.resolve_enumerators
-
-      begin
-        JsonSchemer.configure do |config|
-          config.resolve_enumerators = true
-        end
-
-        JsonSchemer.configuration.resolve_enumerators.should be_true
-      ensure
-        JsonSchemer.configuration.resolve_enumerators = original
       end
     end
   end
