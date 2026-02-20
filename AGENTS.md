@@ -94,7 +94,7 @@ spec/
   format/
     dns_hostname_spec.cr       # DNS hostname validation tests
   ref_spec.cr                  # $ref resolution tests
-  hooks_spec.cr                # Validation hooks tests
+  property_defaults_spec.cr    # Property defaults tests
   options_spec.cr              # Configuration options tests
   x_error_spec.cr              # Custom error message (x-error) tests
   openapi_spec.cr              # OpenAPI 3.1 validation tests
@@ -225,6 +225,7 @@ Available error classes:
 - `InvalidRegexpResolution`
 - `InvalidFileURI`
 - `InvalidEcmaRegexp`
+- `InvalidSchema`
 
 ### Keyword Implementation Pattern
 All JSON Schema keywords inherit from `Keyword`:
