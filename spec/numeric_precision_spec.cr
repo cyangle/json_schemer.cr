@@ -7,7 +7,7 @@ describe "Numeric Precision" do
       "maximum": 9223372036854775806
     })).as_h
     schema = JsonSchemer.schema(schema_hash)
-    
+
     # 9223372036854775807 > 9223372036854775806, so it should fail
     # but as Float64 they might be equal or not. Let's see.
     schema.valid?(JSON::Any.new(Int64::MAX)).should be_false

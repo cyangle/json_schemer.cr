@@ -179,9 +179,8 @@ module JsonSchemer
 
         # MultipleOf keyword
         class MultipleOf < Keyword
-          # Default value 0 is always valid against all numbers
-          # It will be overwritten by parse method via initialize method
-          @multiple_of_value : BigDecimal = BigDecimal.new(0)
+          # Default value 1 is safe - parse validates and sets the actual value
+          @multiple_of_value : BigDecimal = BigDecimal.new(1)
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is not a multiple of: #{value}"
@@ -193,6 +192,9 @@ module JsonSchemer
             end
             # Potential issue of losing precision when converting to BigDecimal
             @multiple_of_value = BigDecimal.new(value.raw.as(Number).to_s)
+            if @multiple_of_value <= BigDecimal.new(0)
+              raise InvalidSchema.new("Value for keyword 'multipleOf' must be strictly greater than 0")
+            end
             value
           end
 

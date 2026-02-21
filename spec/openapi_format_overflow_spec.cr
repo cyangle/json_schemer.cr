@@ -7,7 +7,7 @@ describe "OpenAPI Format Integer Overflow" do
       "format": "int32"
     })).as_h
     schema = JsonSchemer.schema(schema_hash, meta_schema: JsonSchemer.openapi31_dialect_2024_11_10)
-    
+
     # Int64::MIN is -9223372036854775808
     schema.valid?(JSON::Any.new(Int64::MIN)).should be_false
   end
@@ -18,7 +18,7 @@ describe "OpenAPI Format Integer Overflow" do
       "format": "int64"
     })).as_h
     schema = JsonSchemer.schema(schema_hash, meta_schema: JsonSchemer.openapi31_dialect_2024_11_10)
-    
+
     schema.valid?(JSON::Any.new(Int64::MIN)).should be_true
   end
 end
