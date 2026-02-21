@@ -147,6 +147,7 @@ module JsonSchemer
     regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
     output_format : String? = nil,
     access_mode : String? = nil,
+    max_depth : Int32? = nil,
   ) : Schema
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
     Schema.new(
@@ -164,7 +165,8 @@ module JsonSchemer
       ref_resolver: resolved_ref_resolver,
       regexp_resolver: regexp_resolver,
       output_format: output_format,
-      access_mode: access_mode
+      access_mode: access_mode,
+      max_depth: max_depth
     )
   end
 
@@ -182,9 +184,10 @@ module JsonSchemer
     meta_schema : Schema | String | Nil = nil,
     ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
     regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
+    max_depth : Int32? = nil,
   ) : Bool
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
-    meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver)
+    meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver, max_depth)
     meta.valid?(JSON::Any.new(resolved_schema))
   end
 
@@ -203,9 +206,10 @@ module JsonSchemer
     ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
     regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
     output_format : String = "classic",
+    max_depth : Int32? = nil,
   ) : Hash(String, JSON::Any)
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
-    meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver)
+    meta = resolve_meta_schema(resolved_schema, meta_schema, resolved_base_uri, resolved_ref_resolver, regexp_resolver, max_depth)
     meta.validate(JSON::Any.new(resolved_schema), output_format: output_format)
   end
 
@@ -358,6 +362,7 @@ module JsonSchemer
     base_uri : URI?,
     ref_resolver : Proc(URI, JSONHash?) | String | Nil,
     regexp_resolver : Proc(String, Regex?) | String | Nil,
+    max_depth : Int32? = nil,
   ) : Schema
     parseable_schema = JSONHash.new
     if schema_meta = schema["$schema"]?
@@ -365,7 +370,7 @@ module JsonSchemer
         parseable_schema["$schema"] = schema_meta
       end
     end
-    s = self.schema(parseable_schema, base_uri: base_uri, meta_schema: meta_schema, ref_resolver: ref_resolver, regexp_resolver: regexp_resolver)
+    s = self.schema(parseable_schema, base_uri: base_uri, meta_schema: meta_schema, ref_resolver: ref_resolver, regexp_resolver: regexp_resolver, max_depth: max_depth)
     ms = s.meta_schema
     case ms
     when Schema

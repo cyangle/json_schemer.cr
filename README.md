@@ -539,6 +539,26 @@ schema = JsonSchemer.schema(%q({"format": "email"}))
 schema.valid?(JSON::Any.new("invalid"))  # => false (format validation enabled)
 ```
 
+## Security Considerations
+
+When validating untrusted inputs or using untrusted schemas, be aware of the following security considerations:
+
+### Deep Recursion (Stack Overflow)
+JSON Schema allows recursive definitions (e.g., using `{"$ref": "#"}`). To prevent native stack overflows from malicious, deeply-nested JSON instances, `json_schemer` enforces a maximum validation depth.
+* The default `max_depth` is `50`.
+* You can configure this globally via `JsonSchemer.configure { |c| c.max_depth = 100 }` or per-schema via `JsonSchemer.schema(..., max_depth: 100)`.
+* If the depth is exceeded, a `JsonSchemer::MaximumDepthExceeded` error is raised.
+
+### Regular Expression Denial of Service (ReDoS)
+The `pattern` and `patternProperties` keywords use Crystal's standard `Regex` (PCRE). Malicious regular expressions in a schema, or specially crafted string payloads against vulnerable regexes, can cause catastrophic backtracking and exhaust CPU resources.
+* **Recommendation:** Do not accept untrusted schemas without sanitizing or restricting regexes. If you must accept user-defined regexes, consider the potential for ReDoS attacks on your service.
+
+### Server-Side Request Forgery (SSRF) and Local File Inclusion (LFI)
+By default, external `$ref` pointers are disabled and will safely raise an `UnknownRef` error.
+* If you explicitly enable `ref_resolver: "net/http"` or `JsonSchemer::NET_HTTP_REF_RESOLVER`, be aware that malicious schemas could probe internal network services (SSRF).
+* If you load schemas via `Path` or `ref_resolver: "file"` / `JsonSchemer::FILE_URI_REF_RESOLVER`, malicious schemas could attempt to read local files (LFI).
+* **Recommendation:** Only enable network or file resolvers for trusted schemas. If accepting user schemas, stick to the default `DEFAULT_REF_RESOLVER` or use a sandboxed custom resolver.
+
 ## Known Limitations
 
 Based on the JSON Schema Test Suite integration, the following limitations exist:

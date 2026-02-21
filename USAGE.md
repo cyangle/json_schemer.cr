@@ -871,6 +871,25 @@ OpenAPI 3.1 and 3.2 handle the `discriminator` keyword slightly differently:
 The library automatically applies the correct validation rules based on the `openapi` version string in your document.
 
 
+
+## Maximum Validation Depth (Security)
+
+To prevent stack overflows from maliciously nested JSON instances, validation depth is strictly limited.
+
+```crystal
+# The default maximum depth is 50
+schema = JsonSchemer.schema(%q({"$ref": "#"}))
+
+# You can customize it when creating a schema
+schema = JsonSchemer.schema(%q({"$ref": "#"}), max_depth: 100)
+
+# Or set it globally
+JsonSchemer.configure do |config|
+  config.max_depth = 100
+end
+
+# Exceeding the depth raises JsonSchemer::MaximumDepthExceeded
+```
 ## Access Mode (readOnly/writeOnly)
 
 ```crystal

@@ -36,6 +36,7 @@ module JsonSchemer
       property adjacent_results : Hash(Keyword.class, Result)?
       property short_circuit : Bool
       property access_mode : String?
+      property depth : Int32
 
       def initialize(
         @instance : JSON::Any,
@@ -43,6 +44,7 @@ module JsonSchemer
         @adjacent_results : Hash(Keyword.class, Result)? = nil,
         @short_circuit : Bool = false,
         @access_mode : String? = nil,
+        @depth : Int32 = 0,
       )
       end
     end
@@ -140,6 +142,7 @@ module JsonSchemer
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
       output_format : String? = nil,
       access_mode : String? = nil,
+      max_depth : Int32? = nil,
     )
       @location = if parent
                     kw = keyword || ""
@@ -189,7 +192,8 @@ module JsonSchemer
         ref_resolver: ref_resolver || base_config.ref_resolver,
         regexp_resolver: regexp_resolver || base_config.regexp_resolver,
         output_format: output_format || base_config.output_format,
-        access_mode: access_mode || base_config.access_mode
+        access_mode: access_mode || base_config.access_mode,
+        max_depth: max_depth || base_config.max_depth
       )
       @configuration = config
 
@@ -311,6 +315,11 @@ module JsonSchemer
 
     # Validate instance (internal)
     def validate_instance(instance : JSON::Any, instance_location : Location::Node, context : Context) : Result
+      if context.depth >= configuration.max_depth
+        raise MaximumDepthExceeded.new(configuration.max_depth)
+      end
+
+      context.depth += 1
       context.dynamic_scope.push(self)
       original_adjacent_results = context.adjacent_results
 
@@ -346,6 +355,7 @@ module JsonSchemer
 
         result(instance, instance_location, location, valid, nested)
       ensure
+        context.depth -= 1
         context.dynamic_scope.pop
         context.adjacent_results = original_adjacent_results
       end
