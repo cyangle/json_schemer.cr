@@ -110,6 +110,8 @@ spec/
   schema_mutation_spec.cr      # Schema mutation tests
   custom_keyword_class_spec.cr # Custom keyword class tests
   custom_keyword_location_spec.cr # Custom keyword location tests
+  security_depth_spec.cr       # Maximum depth recursion limits tests
+  result_protection_spec.cr    # Schema and result immutability tests
   memory_leak_spec.cr          # Memory leak detection tests
   memory_profiling.cr          # Memory profiling tool
   performance/                 # Performance benchmarks
@@ -226,6 +228,8 @@ Available error classes:
 - `InvalidFileURI`
 - `InvalidEcmaRegexp`
 - `InvalidSchema`
+- `MaximumDepthExceeded` - Raised when the validation recursion depth exceeds the configured maximum.
+- `JsonSchemer::Errors.pretty(error_hash)` - Helper for formatting error messages.
 
 ### Keyword Implementation Pattern
 All JSON Schema keywords inherit from `Keyword`:
@@ -438,3 +442,5 @@ git submodule update --remote JSON-Schema-Test-Suite
 7. **ECMA regexp**: Use `regexp_resolver: "ecma"` for JavaScript-compatible patterns
 8. **OpenAPI 3.1/3.2 support**: Use `JsonSchemer.openapi(document)` for OpenAPI document validation
 9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.
+10. **Validation Depth Security**: `max_depth` restricts recursion depth (default 50) to prevent `MaximumDepthExceeded` stack overflows from malicious JSON.
+11. **Immutability**: Validation results and output units are carefully protected to ensure the original schema hash is not accidentally mutated.
