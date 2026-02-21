@@ -193,10 +193,10 @@ describe "Format Validation" do
       schema.valid?(JSON::Any.new("2023-11-01T18:24:25.500623Z")).should be_true
     end
 
-    it "validates RFC3339 date-time with space separator" do
+    it "rejects RFC3339 date-time with space separator" do
       schema = JsonSchemer.schema(JSON.parse(%q({"format": "date-time"})).as_h)
-      schema.valid?(JSON::Any.new("2023-11-01 18:24:25Z")).should be_true
-      schema.valid?(JSON::Any.new("2023-11-01 18:24:25.500Z")).should be_true
+      schema.valid?(JSON::Any.new("2023-11-01 18:24:25Z")).should be_false
+      schema.valid?(JSON::Any.new("2023-11-01 18:24:25.500Z")).should be_false
     end
 
     it "validates RFC3339 date-time with timezone offsets" do

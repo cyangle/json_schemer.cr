@@ -7,7 +7,7 @@ describe "Email Format Parsing Edge Case" do
       "type": "string",
       "format": "email"
     }))
-    
+
     schema.valid?(JSON::Any.new(%q{"\"test\""@example.com})).should be_true
   end
 end

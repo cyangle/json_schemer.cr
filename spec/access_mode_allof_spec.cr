@@ -15,7 +15,7 @@ describe "Access Mode with allOf" do
       ]
     })).as_h
     schema = JsonSchemer.schema(schema_hash, access_mode: "write")
-    
+
     schema.valid?(JSON.parse(%q({"password": "secret"}))).should be_true
   end
 end
