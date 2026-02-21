@@ -55,6 +55,13 @@ module JsonSchemer
   class InvalidSchema < Error
   end
 
+  # Raised when the validation recursion depth exceeds the configured maximum.
+  class MaximumDepthExceeded < Error
+    def initialize(depth : Int32)
+      super("Maximum validation depth of #{depth} exceeded. This usually indicates a deeply nested or malicious JSON instance.")
+    end
+  end
+
   # Pretty error formatting helper
   module Errors
     def self.pretty(error : Hash(String, JSON::Any)) : String
