@@ -94,10 +94,10 @@ describe "Memory leak prevention" do
     end
   end
 
-  describe "Generic CachedResolver unbounded cache growth" do
+  describe "CachedRegexpResolver unbounded cache growth" do
     it "should limit cache size for String-based resolver" do
-      resolver = JsonSchemer::CachedResolver(Int32).new(&->(key : String) {
-        key.size
+      resolver = JsonSchemer::CachedRegexpResolver.new(&->(key : String) : Regex? {
+        Regex.new(key)
       })
 
       # Add many entries

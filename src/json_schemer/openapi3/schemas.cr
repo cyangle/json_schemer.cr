@@ -64,18 +64,23 @@ module JsonSchemer
     # OpenAPI formats
     FORMATS = {
       "int32" => ->(instance : JSON::Any, _format : String) {
-        !Draft202012::Vocab::Validation::Type.valid_integer?(instance) ||
-        instance.raw.as(Number).to_i64.abs.bit_length < 32
+        return true unless Draft202012::Vocab::Validation::Type.valid_integer?(instance)
+        value = instance.raw.as(Number).to_i64
+        value >= Int32::MIN && value <= Int32::MAX
       },
       "int64" => ->(instance : JSON::Any, _format : String) {
-        !Draft202012::Vocab::Validation::Type.valid_integer?(instance) ||
-        instance.raw.as(Number).to_i64.abs.bit_length < 64
+        return true unless Draft202012::Vocab::Validation::Type.valid_integer?(instance)
+        # Any value that fits in Int64 is valid for int64 format
+        # If it parsed as Int64, it fits in Int64.
+        true
       },
       "float" => ->(instance : JSON::Any, _format : String) {
-        !instance.raw.is_a?(Number) || instance.raw.is_a?(Float64)
+        return true unless instance.raw.is_a?(Number)
+        true # Any number is valid for float
       },
       "double" => ->(instance : JSON::Any, _format : String) {
-        !instance.raw.is_a?(Number) || instance.raw.is_a?(Float64)
+        return true unless instance.raw.is_a?(Number)
+        true # Any number is valid for double
       },
       "password" => ->(_instance : JSON::Any, _format : String) {
         true

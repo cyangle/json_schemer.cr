@@ -72,24 +72,30 @@ module JsonSchemer
     setter keywords : Hash(String, Keyword.class)?
     setter keyword_order : Hash(String, Int32)?
 
+    @_keywords_lock = Mutex.new(protection: :reentrant)
+
     def keywords : Hash(String, Keyword.class)
-      @keywords ||= begin
-        meta = resolved_meta_schema
-        if meta.is_a?(Schema) && meta != self
-          meta.keywords
-        else
-          Draft202012::Vocab::ALL
+      @_keywords_lock.synchronize do
+        @keywords ||= begin
+          meta = resolved_meta_schema
+          if meta.is_a?(Schema) && meta != self
+            meta.keywords
+          else
+            Draft202012::Vocab::ALL
+          end
         end
       end
     end
 
     def keyword_order : Hash(String, Int32)
-      @keyword_order ||= begin
-        meta = resolved_meta_schema
-        if meta.is_a?(Schema) && meta != self
-          meta.keyword_order
-        else
-          {} of String => Int32 # Default order
+      @_keywords_lock.synchronize do
+        @keyword_order ||= begin
+          meta = resolved_meta_schema
+          if meta.is_a?(Schema) && meta != self
+            meta.keyword_order
+          else
+            {} of String => Int32 # Default order
+          end
         end
       end
     end
@@ -158,11 +164,11 @@ module JsonSchemer
       # Convert value to JSON::Any
       @value = case value
                when JSON::Any
-                 value.clone
+                 value
                when Bool
                  JSON::Any.new(value)
                else
-                 JSON::Any.new(value.transform_values(&.clone))
+                 JSON::Any.new(value.transform_values { |v| v })
                end
 
       @parent = parent

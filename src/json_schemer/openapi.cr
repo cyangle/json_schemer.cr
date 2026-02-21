@@ -26,7 +26,7 @@ module JsonSchemer
 
       version = document["openapi"]?.try(&.as_s)
       case version
-      when /\A3\.[12]\.\d+\z/
+      when /\A3\.[12](\.\d+)?\z/
         # Use the cached document schema based on entrypoint
         # The schema-base files have const values for jsonSchemaDialect
         entrypoint_uri = OpenAPI3.select_entrypoint(document)

@@ -6,7 +6,7 @@ module JsonSchemer
   module Format
     # Regex patterns
     DATE_TIME_OFFSET_REGEX      = /(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
-    DATE_TIME_SEPARATOR_CLASS   = "[Tt\\s]"
+    DATE_TIME_SEPARATOR_CLASS   = "[Tt]"
     HOUR_24_REGEX               = /#{DATE_TIME_SEPARATOR_CLASS}24:/
     LEAP_SECOND_REGEX           = /#{DATE_TIME_SEPARATOR_CLASS}\d{2}:\d{2}:6/
     IP_REGEX                    = /\A[0-9a-fA-F:.]+\z/
@@ -27,7 +27,7 @@ module JsonSchemer
     TIME_REGEX = /\A[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
     # RFC 3339 date-time format with stricter timezone offset validation
     # Offset hours: 00-23, minutes: 00-59
-    DATE_TIME_REGEX = /\A[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt\s][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
+    DATE_TIME_REGEX = /\A[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
 
     FRAGMENT_ENCODE_REGEX = /[^\w?\/:@\-.~!$&'()*+,;=]/
 
@@ -60,7 +60,7 @@ module JsonSchemer
 
       # Extract date and time parts
       date_part = data[0, 10]
-      time_part_match = data.match(/[Tt\s](\d{2}):(\d{2}):(\d{2})/)
+      time_part_match = data.match(/[Tt](\d{2}):(\d{2}):(\d{2})/)
       return false unless time_part_match
 
       hour = time_part_match[1].to_i
@@ -416,8 +416,20 @@ module JsonSchemer
       domain_part : String
 
       if data.starts_with?('"')
-        # Quoted local part - find closing quote then @
-        closing_quote = data.index('"', 1)
+        # Quoted local part - find unescaped closing quote then @
+        closing_quote = nil
+        i = 1
+        while i < data.size
+          if data[i] == '\\'
+            i += 2 # Skip escaped character
+            next
+          elsif data[i] == '"'
+            closing_quote = i
+            break
+          end
+          i += 1
+        end
+
         return nil unless closing_quote
         return nil unless closing_quote + 1 < data.size && data[closing_quote + 1] == '@'
 
