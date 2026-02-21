@@ -1,17 +1,20 @@
 module JsonSchemer
   # Result of validation
   class Result
-    property source : Schema | Keyword
-    property instance : JSON::Any
-    property instance_location : Location::Node
-    property keyword_location : Location::Node
-    property valid : Bool
-    property nested : Array(Result)?
-    property type : String?
-    property result_annotation : JSON::Any?
-    property details : Hash(String, JSON::Any)?
-    property ignore_nested : Bool
-    property nested_key : String
+    protected getter source : Schema | Keyword
+    getter instance : JSON::Any
+    getter instance_location : Location::Node
+    getter keyword_location : Location::Node
+    getter valid : Bool
+    getter nested : Array(Result)?
+    getter type : String?
+    getter details : Hash(String, JSON::Any)?
+    getter ignore_nested : Bool
+    getter nested_key : String
+
+    def result_annotation : JSON::Any?
+      @result_annotation.try(&.clone)
+    end
 
     def initialize(
       @source : Schema | Keyword,
@@ -97,7 +100,7 @@ module JsonSchemer
 
       if valid
         if ann = result_annotation
-          out["annotation"] = ann
+          out["annotation"] = ann.clone
         end
       else
         out["error"] = JSON::Any.new(error)
@@ -112,14 +115,14 @@ module JsonSchemer
       out = {
         "data"           => instance,
         "data_pointer"   => JSON::Any.new(resolved_instance_location),
-        "schema"         => schema_obj.value,
+        "schema"         => schema_obj.value.clone,
         "schema_pointer" => JSON::Any.new(schema_obj.schema_pointer),
-        "root_schema"    => schema_obj.root.value,
+        "root_schema"    => schema_obj.root.value.clone,
         "type"           => JSON::Any.new(type || classic_error_type),
       }
       out["error"] = JSON::Any.new(error)
       if det = details
-        out["details"] = JSON::Any.new(det.transform_values { |v| v })
+        out["details"] = JSON::Any.new(det.transform_values(&.clone))
       end
       out
     end
