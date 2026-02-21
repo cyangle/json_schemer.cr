@@ -99,19 +99,6 @@ module JsonSchemer
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             ref_schema.validate_instance(instance, instance_location, context)
           end
-
-          private def resolve_uri_reference(base : URI, ref_str : String) : URI
-            ref = URI.parse(ref_str)
-            # Handle fragment-only refs for opaque URIs (like urn:)
-            # Crystal's URI.resolve doesn't work correctly for opaque URIs
-            if ref.scheme.nil? && ref.path.empty? && ref.fragment
-              result = base.dup
-              result.fragment = ref.fragment
-              result
-            else
-              base.resolve(ref)
-            end
-          end
         end
 
         # $dynamicAnchor keyword
@@ -169,19 +156,6 @@ module JsonSchemer
             end
 
             resolved_schema.validate_instance(instance, instance_location, context)
-          end
-
-          private def resolve_uri_reference(base : URI, ref_str : String) : URI
-            ref = URI.parse(ref_str)
-            # Handle fragment-only refs for opaque URIs (like urn:)
-            # Crystal's URI.resolve doesn't work correctly for opaque URIs
-            if ref.scheme.nil? && ref.path.empty? && ref.fragment
-              result = base.dup
-              result.fragment = ref.fragment
-              result
-            else
-              base.resolve(ref)
-            end
           end
         end
 
