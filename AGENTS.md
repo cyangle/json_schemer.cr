@@ -444,3 +444,13 @@ git submodule update --remote JSON-Schema-Test-Suite
 9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.
 10. **Validation Depth Security**: `max_depth` restricts recursion depth (default 50) to prevent `MaximumDepthExceeded` stack overflows from malicious JSON.
 11. **Immutability**: Validation results and output units are carefully protected to ensure the original schema hash is not accidentally mutated.
+
+## Design Tradeoffs & Architecture Decisions
+
+| Decision | Tradeoff |
+|----------|----------|
+| **Keyword#parsed is a 9-type union** | Runtime casts required, but maintains plugin API compatibility and enables generic `fetch` navigation. Use typed instance variables in keywords for validation-time type safety. |
+| **Thread-safe lazy init with Mutex** | Slight overhead on first access, but prevents race conditions in multi-threaded mode. Validation remains lock-free. |
+| **JsonSchemer.schema() has 15+ parameters** | Long signature, but ergonomic inline configuration without builder boilerplate. Internally consolidated into `Configuration` object. |
+| **Vocabulary execution order matters** | `Applicator` runs before `Validation` so `maxContains` can read `contains` annotation. Custom meta-schemas must preserve this ordering. |
+| **BigDecimal for numeric constraints** | Slight performance overhead vs Float64, but preserves precision for integers > 2^53-1 (Int64::MAX cannot be precisely represented as Float64). |
