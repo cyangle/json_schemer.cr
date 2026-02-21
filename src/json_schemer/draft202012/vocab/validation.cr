@@ -542,15 +542,19 @@ module JsonSchemer
 
             effective_required_keys = case context.access_mode
                                       when "read"
-                                        if @effective_keys_read.nil?
-                                          @effective_keys_read = calculate_effective_keys("read")
+                                        keys = @effective_keys_read
+                                        if keys.nil?
+                                          keys = calculate_effective_keys("read")
+                                          @effective_keys_read = keys
                                         end
-                                        @effective_keys_read.not_nil!
+                                        keys
                                       when "write"
-                                        if @effective_keys_write.nil?
-                                          @effective_keys_write = calculate_effective_keys("write")
+                                        keys = @effective_keys_write
+                                        if keys.nil?
+                                          keys = calculate_effective_keys("write")
+                                          @effective_keys_write = keys
                                         end
-                                        @effective_keys_write.not_nil!
+                                        keys
                                       else
                                         @required_keys
                                       end
