@@ -80,6 +80,10 @@ module JsonSchemer
     # Access mode ("read" or "write") for readOnly/writeOnly validation.
     property access_mode : String?
 
+    # Maximum recursion depth during validation to prevent stack overflows.
+    # Default is 50.
+    property max_depth : Int32 = 50
+
     # Initializes a new Configuration instance with default values.
     def initialize(
       @base_uri : URI = URI.parse("json-schemer://schema"),
@@ -96,6 +100,7 @@ module JsonSchemer
       @regexp_resolver : Proc(String, Regex?) | String = "ruby",
       @output_format : String = "classic",
       @access_mode : String? = nil,
+      @max_depth : Int32 = 50,
     )
     end
 
@@ -114,7 +119,8 @@ module JsonSchemer
         ref_resolver: options[:ref_resolver]? || @ref_resolver,
         regexp_resolver: options[:regexp_resolver]? || @regexp_resolver,
         output_format: options[:output_format]? || @output_format,
-        access_mode: options[:access_mode]? || @access_mode
+        access_mode: options[:access_mode]? || @access_mode,
+        max_depth: options.has_key?(:max_depth) ? options[:max_depth].as(Int32) : @max_depth
       )
     end
   end
