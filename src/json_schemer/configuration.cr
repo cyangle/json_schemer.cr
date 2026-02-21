@@ -59,7 +59,7 @@ module JsonSchemer
     # Custom keywords.
     property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))
 
-    # Whether to insert default values (not fully implemented).
+    # Whether to insert default values (mutates the instance).
     property insert_property_defaults : Bool
 
     # Resolver for property defaults.
@@ -80,7 +80,7 @@ module JsonSchemer
     # Access mode ("read" or "write") for readOnly/writeOnly validation.
     property access_mode : String?
 
-    # Maximum recursion depth during validation to prevent stack overflows.
+    # Maximum recursion depth during validation to prevent stack overflows (Security limit).
     # Default is 50.
     property max_depth : Int32 = 50
 

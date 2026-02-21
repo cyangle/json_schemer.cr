@@ -235,10 +235,14 @@ This section provides a complete reference for all configuration options availab
 | `keywords` | `Hash(String, Proc)` | `{}` | Custom keyword validators |
 | `ref_resolver` | `Proc(URI, JSONHash?) \| String` | Raises `UnknownRef` | Resolver for external `$ref` URIs |
 | `regexp_resolver` | `Proc(String, Regex?) \| String` | `"ruby"` | Regex pattern resolver (`"ruby"` or `"ecma"`) |
-| `output_format` | `String` | `"classic"` | Output format: `"flag"`, `"basic"`, or `"classic"` |
+| `output_format` | `String` | `"classic"` | Output format: `"flag"`, `"basic"`, `"classic"`, `"detailed"`, or `"verbose"` |
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
-| `insert_property_defaults` | `Bool` | `false` | Insert default values (annotation only) |
+| `max_depth` | `Int32` | `50` | Maximum recursion depth for security |
+| `insert_property_defaults` | `Bool` | `false` | Insert default values and mutate input instance |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
+
+> [!WARNING]
+> **Instance Mutation:** `insert_property_defaults` mutates the input data. The library performs a second validation pass after insertion to ensure validity.
 
 ### Detailed Option Descriptions
 
@@ -499,7 +503,7 @@ schema = JsonSchemer.schema(
     "x-must-be-uppercase": true
   }),
   keywords: {
-    "x-must-be-uppercase" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String) {
+    "x-must-be-uppercase" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       if str = instance.as_s?
         if str == str.upcase
           true
