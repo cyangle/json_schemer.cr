@@ -342,6 +342,7 @@ module JsonSchemer
         if value.raw == false
           return result(instance, instance_location, location, false)
         end
+        # Per JSON Schema spec: empty object {} is equivalent to the `true` schema (matches everything)
         if value.raw == true || (value.raw.is_a?(Hash) && value.as_h.empty?)
           return result(instance, instance_location, location, true)
         end

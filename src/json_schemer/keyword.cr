@@ -129,5 +129,18 @@ module JsonSchemer
     # Cache warmup hook
     def after_schema_initialize : Nil
     end
+
+    protected def resolve_uri_reference(base : URI, ref_str : String) : URI
+      ref = URI.parse(ref_str)
+      # Handle fragment-only refs for opaque URIs (like urn:)
+      # Crystal's URI.resolve doesn't work correctly for opaque URIs
+      if ref.scheme.nil? && ref.path.empty? && ref.fragment
+        result = base.dup
+        result.fragment = ref.fragment
+        result
+      else
+        base.resolve(ref)
+      end
+    end
   end
 end
