@@ -275,6 +275,7 @@ module JsonSchemer
         # Contains keyword
         class Contains < Keyword
           @subschema : Schema?
+          @min_contains : Int32 = 1
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array at #{formatted_instance_location} does not contain enough items that match `contains` schema"
@@ -282,6 +283,13 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
+          end
+
+          def after_schema_initialize : Nil
+            min_kw = schema.parsed["minContains"]?
+            if min_kw.is_a?(Keyword)
+              @min_contains = (min_kw.value.as_i? || min_kw.value.as_f).to_i
+            end
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
@@ -298,15 +306,7 @@ module JsonSchemer
 
             anno = nested.each_with_index.compact_map { |result, idx| idx.to_i64 if result.valid }.to_a
 
-            min_contains = schema.parsed["minContains"]?.try do |min_kw|
-              if min_kw.is_a?(Keyword)
-                (min_kw.value.as_i? || min_kw.value.as_f).to_i
-              else
-                1
-              end
-            end || 1
-
-            valid = anno.size >= min_contains
+            valid = anno.size >= @min_contains
             annotation_value = JSON::Any.new(anno.map { |i| JSON::Any.new(i) })
             result(instance, instance_location, location, valid, nested, result_annotation: annotation_value, ignore_nested: true)
           end

@@ -104,7 +104,7 @@ module JsonSchemer
                         end
 
         day >= 1 && day <= days_in_month
-      rescue
+      rescue ex : ArgumentError
         false
       end
     end
@@ -181,7 +181,7 @@ module JsonSchemer
       else
         false
       end
-    rescue
+    rescue ex : Socket::Error
       false
     end
 
@@ -201,7 +201,7 @@ module JsonSchemer
         return false if INVALID_QUERY_REGEX.matches?(uri.query || "")
         scheme = uri.scheme
         !scheme.nil? && !scheme.empty?
-      rescue
+      rescue ex : URI::Error
         false
       end
     end
@@ -215,7 +215,7 @@ module JsonSchemer
         uri = URI.parse(data)
         return false if INVALID_QUERY_REGEX.matches?(uri.query || "")
         true
-      rescue
+      rescue ex : URI::Error
         false
       end
     end

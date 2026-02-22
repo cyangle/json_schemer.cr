@@ -113,7 +113,7 @@ module JsonSchemer
         else
           codepoint.chr.to_s
         end
-      rescue
+      rescue ex : ArgumentError | OverflowError
         match
       end
 
@@ -314,7 +314,7 @@ module JsonSchemer
       converted = crystal_equivalent(pattern)
       Regex.new(converted)
       true
-    rescue
+    rescue ex : InvalidEcmaRegexp | ArgumentError
       false
     end
 

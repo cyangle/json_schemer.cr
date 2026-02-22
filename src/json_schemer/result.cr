@@ -84,7 +84,7 @@ module JsonSchemer
 
       begin
         message % context
-      rescue
+      rescue ex : KeyError | ArgumentError
         message
       end
     end
@@ -314,7 +314,7 @@ module JsonSchemer
 
               default_kw = prop_schema.parsed["default"]?
               if default_kw.is_a?(Keyword)
-                default_value = default_kw.value
+                default_value = default_kw.as(Draft202012::Vocab::MetaData::Default).cloned_value
                 candidates[{instance_ptr, property}] << {default_value, child_result, child_valid}
               end
             end

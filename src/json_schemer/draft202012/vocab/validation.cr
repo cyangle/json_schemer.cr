@@ -14,7 +14,6 @@ module JsonSchemer
                   raise InvalidSchema.new("Value for keyword '#{keyword_name}' is out of Int64 range")
                 end
                 raw.to_i64
-                raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be an integer")
               end
