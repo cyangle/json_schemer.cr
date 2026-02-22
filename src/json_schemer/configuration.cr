@@ -118,6 +118,10 @@ module JsonSchemer
           raise ArgumentError.new("Invalid access_mode: #{am.inspect}. Valid values: #{valid_access_modes.join(", ")}")
         end
       end
+
+      if @max_depth <= 0
+        raise ArgumentError.new("max_depth must be > 0, got: #{@max_depth}")
+      end
     end
 
     def dup_with(**options) : Configuration
