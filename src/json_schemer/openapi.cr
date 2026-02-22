@@ -111,7 +111,7 @@ module JsonSchemer
             root: @schema,
             configuration: @schema.configuration
           )
-        rescue
+        rescue ex : KeyError | IndexError | ArgumentError
           raise e
         end
       else
