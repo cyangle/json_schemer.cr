@@ -6,20 +6,25 @@ module JsonSchemer
         module ParseIntLimit
           def parse_int_limit(keyword_name : String) : Int64
             raw = value.raw
-            if raw.is_a?(Int64)
-              raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                if raw > Int64::MAX.to_f64 || raw < Int64::MIN.to_f64
-                  raise InvalidSchema.new("Value for keyword '#{keyword_name}' is out of Int64 range")
-                end
-                raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be a number")
+            val = if raw.is_a?(Int64)
+                    raw
+                  elsif raw.is_a?(Float64)
+                    if raw == raw.floor
+                      if raw > Int64::MAX.to_f64 || raw < Int64::MIN.to_f64
+                        raise InvalidSchema.new("Value for keyword '#{keyword_name}' is out of Int64 range")
+                      end
+                      raw.to_i64
+                    else
+                      raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be an integer")
+                    end
+                  else
+                    raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be a number")
+                  end
+
+            if val < 0
+              raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be a non-negative integer")
             end
+            val
           end
         end
 
