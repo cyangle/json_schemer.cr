@@ -15,12 +15,20 @@ module JsonSchemer
   # [spider-gazelle/dns](https://github.com/spider-gazelle/dns) shard, which
   # monkey-patches `Socket::Addrinfo` to be non-blocking.
   class DnsResolver
+    # Enum for DNS lookup results — provides compile-time type safety.
+    enum DnsResult
+      Found
+      NotFound
+      Error
+      Timeout
+    end
+
     # Result of a DNS lookup
-    # - result: :found or :not_found (or :error in transient state)
+    # - result: found or not_found (or error in transient state)
     # - expires_at: When the entry is considered "expired" and should be refreshed (soft TTL)
     # - stale_at: When the entry is considered "dead" and cannot be used as fallback (hard TTL)
     private record CacheEntry,
-      result : Symbol,
+      result : DnsResult,
       expires_at : Time::Instant,
       stale_at : Time::Instant
 
@@ -57,10 +65,10 @@ module JsonSchemer
     end
 
     # Resolves the hostname and returns the status:
-    # - `:found`: Hostname exists.
-    # - `:not_found`: Hostname does not exist.
-    # - `:error`: DNS lookup failed (network error, timeout, etc.) and no stale fallback available.
-    def resolve(hostname : String) : Symbol
+    # - : Hostname exists.
+    # - : Hostname does not exist.
+    # - : DNS lookup failed (network error, timeout, etc.) and no stale fallback available.
+    def resolve(hostname : String) : DnsResult
       now = Time.instant
 
       # 1. Fast path: Check cache (global lock, very fast)
@@ -81,18 +89,18 @@ module JsonSchemer
         lookup_result = perform_lookup_with_timeout(hostname)
 
         case lookup_result
-        when :timeout, :error
+        when DnsResult::Timeout, DnsResult::Error
           # Network failure or timeout. Try to fallback to stale data.
           if (entry = get_cache(hostname)) && entry.stale_at > now
             # Return stale data. We do NOT update the cache, so next call will retry.
             return entry.result
           end
           # No usable stale data -> return error
-          :error
+          DnsResult::Error
         else
           # Successful lookup (found or not_found)
           # Determine soft TTL based on result
-          result_ttl = (lookup_result == :not_found) ? @not_found_ttl : @ttl
+          result_ttl = (lookup_result == DnsResult::NotFound) ? @not_found_ttl : @ttl
 
           # Update cache with new result, soft TTL, and hard stale TTL
           set_cache(
@@ -123,7 +131,7 @@ module JsonSchemer
       @cache_mutex.synchronize { @cache.get(hostname) }
     end
 
-    private def set_cache(hostname : String, result : Symbol, expires_at : Time::Instant, stale_at : Time::Instant)
+    private def set_cache(hostname : String, result : DnsResult, expires_at : Time::Instant, stale_at : Time::Instant)
       @cache_mutex.synchronize do
         @cache.set(hostname, CacheEntry.new(result, expires_at, stale_at))
       end
@@ -134,10 +142,10 @@ module JsonSchemer
     end
 
     # Performs lookup with a strict timeout using a fiber
-    # Returns :found, :not_found, :error, or :timeout
-    protected def perform_lookup_with_timeout(hostname : String) : Symbol
+    # Returns DnsResult::Found, DnsResult::NotFound, DnsResult::Error, or DnsResult::Timeout
+    protected def perform_lookup_with_timeout(hostname : String) : DnsResult
       # Use a buffered channel to prevent fiber leak if timeout happens
-      channel = Channel(Symbol).new(1)
+      channel = Channel(DnsResult).new(1)
 
       spawn do
         # This runs in a separate fiber
@@ -148,11 +156,11 @@ module JsonSchemer
       when result = channel.receive
         result
       when timeout(@timeout)
-        :timeout
+        DnsResult::Timeout
       end
     end
 
-    protected def perform_lookup(hostname : String) : Symbol
+    protected def perform_lookup(hostname : String) : DnsResult
       # Note: This is a blocking operation unless `spider-gazelle/dns` is required
       # with its monkey-patching enabled (`require "dns/ext/addrinfo"`).
       addresses = Socket::Addrinfo.resolve(
@@ -161,17 +169,17 @@ module JsonSchemer
         family: Socket::Family::UNSPEC,
         type: Socket::Type::STREAM
       )
-      addresses.empty? ? :not_found : :found
+      addresses.empty? ? DnsResult::NotFound : DnsResult::Found
     rescue ex : Socket::Error
       # Check for NXDOMAIN or "No address found"
       msg = ex.message || ""
       if msg.includes?("No address found") || msg.includes?("Name or service not known") || ex.os_error == -2
-        :not_found
+        DnsResult::NotFound
       else
-        :error
+        DnsResult::Error
       end
     rescue
-      :error
+      DnsResult::Error
     end
   end
 end

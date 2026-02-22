@@ -4,8 +4,6 @@ module JsonSchemer
       module Base
         # AllOf with discriminator support
         class AllOf < Draft202012::Vocab::Applicator::AllOf
-          property skip_ref_once : String?
-
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             schemas = parsed.as(Array(Schema))
             nested = [] of Result
@@ -14,18 +12,17 @@ module JsonSchemer
               ref_kw = subschema.parsed["$ref"]?
               if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
                 ref_schema = ref_kw.ref_schema
-                next if skip_ref_once == ref_schema.absolute_keyword_location
+                next if context.discriminator_skip.includes?(ref_schema.absolute_keyword_location)
 
                 disc_kw = ref_schema.parsed["discriminator"]?
                 if disc_kw.is_a?(Discriminator)
-                  disc_kw.skip_ref_once = schema.absolute_keyword_location
+                  context.discriminator_skip.add(schema.absolute_keyword_location)
                 end
               end
 
               nested << subschema.validate_instance(instance, instance_location, context)
             end
 
-            @skip_ref_once = nil
             result(instance, instance_location, location, nested.all?(&.valid), nested)
           end
         end
@@ -49,8 +46,6 @@ module JsonSchemer
         # Discriminator keyword
         class Discriminator < Keyword
           FIXED_FIELD_REGEX = /\A[a-zA-Z0-9\.\-_]+\z/
-
-          property skip_ref_once : String?
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "value at #{formatted_instance_location} does not match `discriminator` schema"
@@ -94,15 +89,14 @@ module JsonSchemer
 
             return result(instance, instance_location, location, false) unless subschema
 
-            return nil if skip_ref_once == subschema.absolute_keyword_location
+            return nil if context.discriminator_skip.includes?(subschema.absolute_keyword_location)
 
             all_of_kw = subschema.parsed["allOf"]?
             if all_of_kw.is_a?(AllOf)
-              all_of_kw.skip_ref_once = schema.absolute_keyword_location
+              context.discriminator_skip.add(schema.absolute_keyword_location)
             end
 
             subschema_result = subschema.validate_instance(instance, instance_location, context)
-            @skip_ref_once = nil
 
             result(instance, instance_location, location, subschema_result.valid, subschema_result.nested)
           end

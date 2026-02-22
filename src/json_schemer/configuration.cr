@@ -102,6 +102,17 @@ module JsonSchemer
       @access_mode : String? = nil,
       @max_depth : Int32 = 50,
     )
+      valid_output_formats = {"flag", "basic", "classic", "detailed", "verbose"}
+      unless valid_output_formats.includes?(@output_format)
+        raise ArgumentError.new("Invalid output_format: #{@output_format.inspect}. Valid values: #{valid_output_formats.join(", ")}")
+      end
+
+      if am = @access_mode
+        valid_access_modes = {"read", "write"}
+        unless valid_access_modes.includes?(am)
+          raise ArgumentError.new("Invalid access_mode: #{am.inspect}. Valid values: #{valid_access_modes.join(", ")}")
+        end
+      end
     end
 
     def dup_with(**options) : Configuration

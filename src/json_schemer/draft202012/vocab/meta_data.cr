@@ -18,7 +18,8 @@ module JsonSchemer
 
         # Default keyword
         class Default < Keyword
-          def value : JSON::Any
+          # Returns a deep clone of the default value, safe for mutation (e.g., inserting into instances).
+          def cloned_value : JSON::Any
             @value.clone
           end
 

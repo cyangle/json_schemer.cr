@@ -4,12 +4,15 @@ module JsonSchemer
   # Default maximum cache size for resolver caches
   DEFAULT_RESOLVER_CACHE_SIZE = 1000
 
-  # Specialized cached resolver for URI -> JSONHash? with LRU eviction
+  # Specialized cached resolver for URI -> JSONHash? with LRU eviction.
+  # Thread-safe: uses a Mutex to synchronize access to the underlying LRUCache.
   class CachedRefResolver
     @cache : LRUCache(String, JSONHash?)
+    @mutex : Mutex
 
     def initialize(max_size : Int32 = DEFAULT_RESOLVER_CACHE_SIZE, &@resolver : Proc(URI, JSONHash?))
       @cache = LRUCache(String, JSONHash?).new(max_size)
+      @mutex = Mutex.new
     end
 
     def call(uri : URI) : JSONHash?
@@ -17,12 +20,21 @@ module JsonSchemer
 
       # Use fetch to get existence + value in one O(1) operation
       # This correctly handles cached nil values
-      found, cached = @cache.fetch(key)
-      return cached if found
+      @mutex.synchronize do
+        found, cached = @cache.fetch(key)
+        return cached if found
+      end
 
-      # Resolve and cache the result (including nil)
+      # Resolve outside the lock to avoid holding it during I/O
       result = @resolver.call(uri)
-      @cache.set(key, result)
+
+      @mutex.synchronize do
+        # Double-check: another fiber may have cached it while we were resolving
+        found, cached = @cache.fetch(key)
+        return cached if found
+
+        @cache.set(key, result)
+      end
       result
     end
 
@@ -32,32 +44,42 @@ module JsonSchemer
 
     # Returns the current number of cached entries
     def cache_size : Int32
-      @cache.size
+      @mutex.synchronize { @cache.size }
     end
 
     # Clears all cached entries
     def clear_cache : Nil
-      @cache.clear
+      @mutex.synchronize { @cache.clear }
     end
   end
 
-  # Specialized cached resolver for String -> Regex? with LRU eviction
+  # Specialized cached resolver for String -> Regex? with LRU eviction.
+  # Thread-safe: uses a Mutex to synchronize access to the underlying LRUCache.
   class CachedRegexpResolver
     @cache : LRUCache(String, Regex?)
+    @mutex : Mutex
 
     def initialize(max_size : Int32 = DEFAULT_RESOLVER_CACHE_SIZE, &@resolver : Proc(String, Regex?))
       @cache = LRUCache(String, Regex?).new(max_size)
+      @mutex = Mutex.new
     end
 
     def call(pattern : String) : Regex?
-      # Use fetch to get existence + value in one O(1) operation
-      # This correctly handles cached nil values
-      found, cached = @cache.fetch(pattern)
-      return cached if found
+      @mutex.synchronize do
+        found, cached = @cache.fetch(pattern)
+        return cached if found
+      end
 
-      # Resolve and cache the result (including nil)
+      # Resolve outside the lock to avoid holding it during compilation
       result = @resolver.call(pattern)
-      @cache.set(pattern, result)
+
+      @mutex.synchronize do
+        # Double-check: another fiber may have cached it while we were resolving
+        found, cached = @cache.fetch(pattern)
+        return cached if found
+
+        @cache.set(pattern, result)
+      end
       result
     end
 
@@ -67,12 +89,12 @@ module JsonSchemer
 
     # Returns the current number of cached entries
     def cache_size : Int32
-      @cache.size
+      @mutex.synchronize { @cache.size }
     end
 
     # Clears all cached entries
     def clear_cache : Nil
-      @cache.clear
+      @mutex.synchronize { @cache.clear }
     end
   end
 end

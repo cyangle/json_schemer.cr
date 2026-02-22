@@ -153,52 +153,6 @@ require "./json_schemer/errors"
 # ... etc
 ```
 
-### Naming Conventions
-- **Classes/Modules**: `PascalCase` (e.g., `Schema`, `Keyword`, `DynamicRef`)
-- **Methods/Variables**: `snake_case` (e.g., `validate_instance`, `keyword_location`)
-- **Constants**: `SCREAMING_SNAKE_CASE` (e.g., `VOCABULARIES`, `DEFAULT_REF_RESOLVER`)
-- **Type aliases**: `PascalCase` (e.g., `JSONHash`)
-- **Keyword classes**: Match JSON Schema keyword name in PascalCase
-  - `$ref` -> `Ref`
-  - `$dynamicAnchor` -> `DynamicAnchor`
-  - `additionalProperties` -> `AdditionalProperties`
-
-### Property Macros
-Use built-in macros to define instance variables and accessors concisely.
-
-- **Standard Accessors**:
-  - `getter name` (Reader): Defines `@name` and `def name`.
-  - `setter name` (Writer): Defines `@name` and `def name=(value)`.
-  - `property name` (Both): Defines `@name`, `def name`, and `def name=(value)`.
-
-- **Type & Initialization**:
-  - `getter name : String` (Typed)
-  - `getter name : String = "default"` (Initial value)
-  - `property name : Int32 = 0` (Combined)
-
-- **Lazy Initialization**:
-  - Use block syntax with `getter` for values calculated on first access.
-  ```crystal
-  getter lazy_val : String do
-    complex_calculation
-  end
-  ```
-
-- **Nil-safe Accessors (`!` suffix)**:
-  - Use `getter!` / `property!` for nilable instance variables that should be treated as non-nil (raises `NilAssertionError` if nil).
-  - Useful for late initialization.
-  ```crystal
-  # @name is String?, but name returns String (raises if nil)
-  getter! name : String
-  ```
-
-- **Boolean Predicates (`?` suffix)**:
-  - Use `getter?` / `property?` for boolean variables.
-  - Generates `def name?` instead of `def name`.
-  ```crystal
-  getter? valid : Bool  # defines def valid? : Bool
-  ```
-
 ### Type Annotations
 - Always annotate method return types for public methods
 - Use union types for nullable values: `Schema | Nil` or `Schema?`
@@ -211,7 +165,7 @@ Use built-in macros to define instance variables and accessors concisely.
 - Define custom error classes inheriting from `Error < Exception`
 - Use descriptive error names: `UnknownRef`, `InvalidRefPointer`, `InvalidEcmaRegexp`
 - Raise with context: `raise UnknownRef.new(uri.to_s)`
-- Use `not_nil!` sparingly - prefer safe navigation or guards
+- Don't use `not_nil!` - prefer safe navigation or guards
 
 Available error classes:
 - `Error` - Base error class

@@ -39,12 +39,12 @@ module JsonSchemer
 
         # 3. Perform DNS lookup
         case @resolver.resolve(hostname)
-        when :found
+        when DnsResolver::DnsResult::Found
           true
-        when :not_found
+        when DnsResolver::DnsResult::NotFound
           # Domain definitely does not exist
           false
-        when :error
+        when DnsResolver::DnsResult::Error
           # DNS lookup failed (network error, timeout, etc.)
           # Fallback to syntax validation (which already passed at step 2)
           true

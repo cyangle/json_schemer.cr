@@ -37,6 +37,10 @@ module JsonSchemer
       property short_circuit : Bool
       property access_mode : String?
       property depth : Int32
+      # Thread-safe discriminator recursion guard: tracks schema locations to skip
+      # during discriminator <-> allOf validation to prevent infinite loops.
+      # Stored on Context instead of keyword instances for fiber-safety.
+      property discriminator_skip : Set(String)
 
       def initialize(
         @instance : JSON::Any,
@@ -45,6 +49,7 @@ module JsonSchemer
         @short_circuit : Bool = false,
         @access_mode : String? = nil,
         @depth : Int32 = 0,
+        @discriminator_skip : Set(String) = Set(String).new,
       )
       end
     end
