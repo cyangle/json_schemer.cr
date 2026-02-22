@@ -55,6 +55,9 @@ module JsonSchemer
 
   WINDOWS_URI_PATH_REGEX = /\A\/[a-z]:/i
 
+  # Maximum allowed size for fetched schema responses (10 MB).
+  MAX_SCHEMA_SIZE = 10 * 1024 * 1024
+
   # Default ref resolver that raises `UnknownRef` for any external reference.
   DEFAULT_REF_RESOLVER = ->(uri : URI) : JSONHash? {
     raise UnknownRef.new(uri.to_s)
@@ -63,12 +66,26 @@ module JsonSchemer
   # Ref resolver that fetches schemas via HTTP(S).
   #
   # Uses `HTTP::Client` to fetch the content with a 30-second timeout.
+  # Limits response body size to `MAX_SCHEMA_SIZE` to prevent OOM from
+  # malicious or misconfigured endpoints.
   NET_HTTP_REF_RESOLVER = ->(uri : URI) : JSONHash? {
     client = HTTP::Client.new(uri)
     client.connect_timeout = 30.seconds
     client.read_timeout = 30.seconds
-    response = client.get(uri.request_target)
-    JSONHash.from_json(response.body)
+    body = ""
+    client.get(uri.request_target) do |response|
+      content_length = response.headers["Content-Length"]?.try(&.to_i64?)
+      if content_length && content_length > MAX_SCHEMA_SIZE
+        raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes (Content-Length: #{content_length})")
+      end
+      buf = IO::Memory.new
+      bytes_read = IO.copy(response.body_io, buf, MAX_SCHEMA_SIZE + 1)
+      if bytes_read > MAX_SCHEMA_SIZE
+        raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes")
+      end
+      body = buf.to_s
+    end
+    JSONHash.from_json(body)
   }
 
   # Ref resolver that reads schemas from the local filesystem.
