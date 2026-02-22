@@ -8,30 +8,37 @@ module JsonSchemer
     class Node
       property name : String?
       property parent : Node?
+      @children : Hash(String, Node) = {} of String => Node
       @resolved : String?
+      @lock : Mutex = Mutex.new(protection: :reentrant)
 
       def initialize(@name = nil, @parent = nil)
       end
 
       def resolve : String
-        @resolved ||= if p = @parent
-                        if name = @name
-                          "#{p.resolve}/#{Location.escape_json_pointer_token(name)}"
+        @resolved || @lock.synchronize do
+          @resolved ||= if p = @parent
+                          if name = @name
+                            "#{p.resolve}/#{Location.escape_json_pointer_token(name)}"
+                          else
+                            ""
+                          end
                         else
                           ""
                         end
-                      else
-                        ""
-                      end
+        end
       end
 
       # Get or create a child node
       def join(name : String) : Node
-        children = (@children ||= {} of String => Node)
-        children[name] ||= Node.new(name, self)
-      end
+        if node = @children[name]?
+          return node
+        end
 
-      @children : Hash(String, Node)?
+        @lock.synchronize do
+          @children[name] ||= Node.new(name, self)
+        end
+      end
     end
 
     # Get root location
