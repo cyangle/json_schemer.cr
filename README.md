@@ -238,6 +238,7 @@ This section provides a complete reference for all configuration options availab
 | `output_format` | `String` | `"classic"` | Output format: `"flag"`, `"basic"`, `"classic"`, `"detailed"`, or `"verbose"` |
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
 | `max_depth` | `Int32` | `50` | Maximum recursion depth for security |
+| `regexp_filter` | `Proc(String, Bool)?` | `nil` | Custom filter for regular expressions |
 | `insert_property_defaults` | `Bool` | `false` | Insert default values and mutate input instance |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
 
@@ -555,7 +556,20 @@ JSON Schema allows recursive definitions (e.g., using `{"$ref": "#"}`). To preve
 
 ### Regular Expression Denial of Service (ReDoS)
 The `pattern` and `patternProperties` keywords use Crystal's standard `Regex` (PCRE). Malicious regular expressions in a schema, or specially crafted string payloads against vulnerable regexes, can cause catastrophic backtracking and exhaust CPU resources.
-* **Recommendation:** Do not accept untrusted schemas without sanitizing or restricting regexes. If you must accept user-defined regexes, consider the potential for ReDoS attacks on your service.
+
+`json_schemer` provides several layers of protection:
+* **Backtracking Limits:** The library automatically catches backtrack limit exceeded errors from PCRE and raises a `JsonSchemer::RegexMatchLimitExceeded` exception instead of allowing the process to hang or crash.
+* **Pattern Filtering:** You can restrict which regular expressions are allowed in schemas using allowlists, denylists, or custom filter procs.
+
+```crystal
+# Use a custom filter to limit pattern complexity/length
+schema = JsonSchemer.schema(
+  schema_hash,
+  regexp_filter: ->(pattern : String) { pattern.size < 100 }
+)
+```
+
+* **Recommendation:** Only accept trusted schemas. If you must accept user-defined schemas, always use `regexp_filter` to restrict regular expression patterns.
 
 ### Server-Side Request Forgery (SSRF) and Local File Inclusion (LFI)
 By default, external `$ref` pointers are disabled and will safely raise an `UnknownRef` error.

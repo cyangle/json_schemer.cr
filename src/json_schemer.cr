@@ -17,6 +17,7 @@ require "./json_schemer/location"
 require "./json_schemer/resources"
 require "./json_schemer/cached_resolver"
 require "./json_schemer/ecma_regexp"
+require "./json_schemer/regexp_helper"
 require "./json_schemer/format"
 require "./json_schemer/content"
 require "./json_schemer/output"
@@ -169,6 +170,7 @@ module JsonSchemer
     output_format : String? = nil,
     access_mode : String? = nil,
     max_depth : Int32? = nil,
+    regexp_filter : Proc(String, Bool)? = nil,
   ) : Schema
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
     Schema.new(
@@ -187,7 +189,8 @@ module JsonSchemer
       regexp_resolver: regexp_resolver,
       output_format: output_format,
       access_mode: access_mode,
-      max_depth: max_depth
+      max_depth: max_depth,
+      regexp_filter: regexp_filter
     )
   end
 

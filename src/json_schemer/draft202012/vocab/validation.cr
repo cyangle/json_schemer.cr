@@ -336,7 +336,7 @@ module JsonSchemer
             end
             regex = @regex
             return result(instance, instance_location, location, true) unless regex
-            valid = regex.matches?(instance.as_s)
+            valid = RegexpHelper.matches?(regex, instance.as_s)
             result(instance, instance_location, location, valid)
           end
         end

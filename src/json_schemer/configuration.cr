@@ -84,6 +84,10 @@ module JsonSchemer
     # Default is 50.
     property max_depth : Int32 = 50
 
+    # Optional custom filter for regular expression patterns.
+    # Takes the pattern string and returns true if it is allowed.
+    property regexp_filter : Proc(String, Bool)?
+
     # Initializes a new Configuration instance with default values.
     def initialize(
       @base_uri : URI = URI.parse("json-schemer://schema"),
@@ -101,6 +105,7 @@ module JsonSchemer
       @output_format : String = "classic",
       @access_mode : String? = nil,
       @max_depth : Int32 = 50,
+      @regexp_filter : Proc(String, Bool)? = nil,
     )
       valid_output_formats = {"flag", "basic", "classic", "detailed", "verbose"}
       unless valid_output_formats.includes?(@output_format)
@@ -131,7 +136,8 @@ module JsonSchemer
         regexp_resolver: options[:regexp_resolver]? || @regexp_resolver,
         output_format: options[:output_format]? || @output_format,
         access_mode: options[:access_mode]? || @access_mode,
-        max_depth: options.has_key?(:max_depth) ? options[:max_depth].as(Int32) : @max_depth
+        max_depth: options.has_key?(:max_depth) ? options[:max_depth].as(Int32) : @max_depth,
+        regexp_filter: options.has_key?(:regexp_filter) ? options[:regexp_filter].as(Proc(String, Bool)?) : @regexp_filter
       )
     end
   end

@@ -154,6 +154,7 @@ module JsonSchemer
       output_format : String? = nil,
       access_mode : String? = nil,
       max_depth : Int32? = nil,
+      regexp_filter : Proc(String, Bool)? = nil,
     )
       @location = if parent
                     kw = keyword || ""
@@ -204,7 +205,8 @@ module JsonSchemer
         regexp_resolver: regexp_resolver || base_config.regexp_resolver,
         output_format: output_format || base_config.output_format,
         access_mode: access_mode || base_config.access_mode,
-        max_depth: max_depth || base_config.max_depth
+        max_depth: max_depth || base_config.max_depth,
+        regexp_filter: regexp_filter || base_config.regexp_filter
       )
       @configuration = config
 
@@ -540,6 +542,15 @@ module JsonSchemer
 
     # Resolve regexp pattern
     def resolve_regexp(pattern : String) : Regex
+      config = configuration
+
+      # Apply custom filter
+      if filter = config.regexp_filter
+        unless filter.call(pattern)
+          raise RegexFilterViolation.new(pattern)
+        end
+      end
+
       regexp_resolver.call(pattern) || raise InvalidRegexpResolution.new(pattern)
     end
 

@@ -62,6 +62,20 @@ module JsonSchemer
     end
   end
 
+  # Raised when a regular expression match exceeds the backtracking limit (ReDoS protection).
+  class RegexMatchLimitExceeded < Error
+    def initialize(pattern : String)
+      super("Regular expression match limit exceeded for pattern: #{pattern.inspect}. This indicates potential catastrophic backtracking (ReDoS).")
+    end
+  end
+
+  # Raised when a schema contains a regular expression pattern that is disallowed.
+  class RegexFilterViolation < Error
+    def initialize(pattern : String)
+      super("Regular expression pattern is disallowed by configuration: #{pattern.inspect}")
+    end
+  end
+
   # Pretty error formatting helper
   module Errors
     def self.pretty(error : Hash(String, JSON::Any)) : String
