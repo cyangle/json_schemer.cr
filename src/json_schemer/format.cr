@@ -355,7 +355,7 @@ module JsonSchemer
 
     # Validates a UUID.
     def self.valid_uuid?(data : String) : Bool
-      UUID_REGEX.matches?(data) || data == NIL_UUID
+      UUID_REGEX.matches?(data)
     end
 
     # Validates a URI Template (RFC 6570).

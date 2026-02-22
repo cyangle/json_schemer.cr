@@ -311,8 +311,8 @@ module JsonSchemer
       return false if has_invalid_escapes?(pattern)
 
       # Then check if it's a valid regex overall
-      crystal_equivalent(pattern)
-      Regex.new(crystal_equivalent(pattern))
+      converted = crystal_equivalent(pattern)
+      Regex.new(converted)
       true
     rescue
       false
