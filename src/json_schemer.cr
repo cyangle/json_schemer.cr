@@ -12,6 +12,7 @@ require "hana"
 {% end %}
 
 require "./json_schemer/version"
+require "./json_schemer/constants"
 require "./json_schemer/errors"
 require "./json_schemer/location"
 require "./json_schemer/resources"
