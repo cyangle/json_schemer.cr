@@ -127,7 +127,7 @@ module JsonSchemer
 
                   if ref_str.starts_with?("#/components/schemas/")
                     schema_name = ref_str.sub("#/components/schemas/", "")
-                    if FIXED_FIELD_REGEX.matches?(schema_name)
+                    if RegexpHelper.matches?(FIXED_FIELD_REGEX, schema_name)
                       by_name[schema_name] = subschema
                     end
                   end
@@ -158,7 +158,7 @@ module JsonSchemer
 
           # Resolve schema reference (with component shorthand support)
           private def resolve_schema_ref(schema_ref : String) : Schema?
-            if FIXED_FIELD_REGEX.matches?(schema_ref)
+            if RegexpHelper.matches?(FIXED_FIELD_REGEX, schema_ref)
               begin
                 return schema.ref("#/components/schemas/#{schema_ref}")
               rescue InvalidRefPointer

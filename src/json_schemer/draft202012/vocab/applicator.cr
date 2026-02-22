@@ -378,7 +378,7 @@ module JsonSchemer
 
             @compiled_patterns.each do |regexp, pattern_schema|
               instance.as_h.each do |key, val|
-                if regexp.matches?(key)
+                if RegexpHelper.matches?(regexp, key)
                   evaluated << key
                   nested << pattern_schema.validate_instance(val, join_location(instance_location, key), context)
                 end
