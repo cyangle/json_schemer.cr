@@ -29,7 +29,7 @@ module JsonSchemer
     # Offset hours: 00-23, minutes: 00-59
     DATE_TIME_REGEX = /\A[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
 
-    FRAGMENT_ENCODE_REGEX = /[^\w?\/:@\-.~!$&'()*+,;=]/
+    FRAGMENT_ENCODE_REGEX = ::JsonSchemer::FRAGMENT_ENCODE_REGEX
 
     # Validation constants
     MAX_HOUR            =  23

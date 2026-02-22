@@ -1,7 +1,7 @@
 module JsonSchemer
   # Output module for result formatting
   module Output
-    FRAGMENT_ENCODE_REGEX = /[^\w?\/:@\-.~!$&'()*+,;=]/
+    FRAGMENT_ENCODE_REGEX = ::JsonSchemer::FRAGMENT_ENCODE_REGEX
 
     @escaped_keyword : String?
 
