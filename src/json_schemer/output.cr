@@ -3,6 +3,8 @@ module JsonSchemer
   module Output
     FRAGMENT_ENCODE_REGEX = /[^\w?\/:@\-.~!$&'()*+,;=]/
 
+    @escaped_keyword : String?
+
     # Create a result
     def result(
       instance : JSON::Any,
@@ -31,8 +33,10 @@ module JsonSchemer
     end
 
     # Escape keyword for JSON pointer
-    getter escaped_keyword : String do
-      Location.escape_json_pointer_token(keyword)
+    def escaped_keyword : String
+      @escaped_keyword || @lock.synchronize do
+        @escaped_keyword ||= Location.escape_json_pointer_token(keyword)
+      end
     end
 
     # Join location with keyword

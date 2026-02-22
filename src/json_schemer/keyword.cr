@@ -3,6 +3,10 @@ module JsonSchemer
   abstract class Keyword
     include Output
 
+    @lock = Mutex.new(protection: :reentrant)
+    @absolute_keyword_location : String?
+    @schema_pointer : String?
+
     getter value : JSON::Any
     getter parent : Schema | Keyword
     getter root : Schema
@@ -32,13 +36,17 @@ module JsonSchemer
     end
 
     # Absolute keyword location for output
-    getter absolute_keyword_location : String do
-      "#{parent.absolute_keyword_location}/#{fragment_encode(escaped_keyword)}"
+    def absolute_keyword_location : String
+      @absolute_keyword_location || @lock.synchronize do
+        @absolute_keyword_location ||= "#{parent.absolute_keyword_location}/#{fragment_encode(escaped_keyword)}"
+      end
     end
 
     # Schema pointer for output
-    getter schema_pointer : String do
-      "#{parent.schema_pointer}/#{escaped_keyword}"
+    def schema_pointer : String
+      @schema_pointer || @lock.synchronize do
+        @schema_pointer ||= "#{parent.schema_pointer}/#{escaped_keyword}"
+      end
     end
 
     # Error key for i18n
