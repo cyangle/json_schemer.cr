@@ -77,10 +77,10 @@ module JsonSchemer
     setter keywords : Hash(String, Keyword.class)?
     setter keyword_order : Hash(String, Int32)?
 
-    @_keywords_lock = Mutex.new(protection: :reentrant)
+    @lock = Mutex.new(protection: :reentrant)
 
     def keywords : Hash(String, Keyword.class)
-      @_keywords_lock.synchronize do
+      @keywords || @lock.synchronize do
         @keywords ||= begin
           meta = resolved_meta_schema
           if meta.is_a?(Schema) && meta != self
@@ -93,7 +93,7 @@ module JsonSchemer
     end
 
     def keyword_order : Hash(String, Int32)
-      @_keywords_lock.synchronize do
+      @keyword_order || @lock.synchronize do
         @keyword_order ||= begin
           meta = resolved_meta_schema
           if meta.is_a?(Schema) && meta != self
@@ -377,37 +377,41 @@ module JsonSchemer
 
     # Get schema pointer
     def schema_pointer : String
-      @schema_pointer ||= if p = @parent
-                            if kw = @keyword
-                              "#{p.schema_pointer}/#{Location.escape_json_pointer_token(kw)}"
+      @schema_pointer || @lock.synchronize do
+        @schema_pointer ||= if p = @parent
+                              if kw = @keyword
+                                "#{p.schema_pointer}/#{Location.escape_json_pointer_token(kw)}"
+                              else
+                                p.schema_pointer
+                              end
                             else
-                              p.schema_pointer
+                              ""
                             end
-                          else
-                            ""
-                          end
+      end
     end
 
     # Absolute keyword location
     def absolute_keyword_location : String
-      @absolute_keyword_location ||= begin
-        buri = base_uri
-        frag = buri.fragment
-        if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
-          uri = buri.dup
-          uri.fragment = ""
-          uri.to_s
-        elsif kw = @keyword
-          if p = @parent
-            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+      @absolute_keyword_location || @lock.synchronize do
+        @absolute_keyword_location ||= begin
+          buri = base_uri
+          frag = buri.fragment
+          if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
+            uri = buri.dup
+            uri.fragment = ""
+            uri.to_s
+          elsif kw = @keyword
+            if p = @parent
+              "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+            else
+              ""
+            end
           else
-            ""
-          end
-        else
-          if p = @parent
-            p.absolute_keyword_location
-          else
-            ""
+            if p = @parent
+              p.absolute_keyword_location
+            else
+              ""
+            end
           end
         end
       end
@@ -438,7 +442,9 @@ module JsonSchemer
 
     # Get resources
     def resources : NamedTuple(lexical: Resources, dynamic: Resources)
-      @resources ||= {lexical: Resources.new, dynamic: Resources.new}
+      @resources || @lock.synchronize do
+        @resources ||= {lexical: Resources.new, dynamic: Resources.new}
+      end
     end
 
     # Resolves a reference from the current schema's context.
@@ -656,36 +662,40 @@ module JsonSchemer
 
     # Get ref resolver proc
     def ref_resolver : Proc(URI, JSONHash?)
-      @ref_resolver ||= case configuration.ref_resolver
-                        when String
-                          if configuration.ref_resolver == "net/http"
-                            resolver = CachedRefResolver.new(&NET_HTTP_REF_RESOLVER)
-                            resolver.to_proc
+      @ref_resolver || @lock.synchronize do
+        @ref_resolver ||= case configuration.ref_resolver
+                          when String
+                            if configuration.ref_resolver == "net/http"
+                              resolver = CachedRefResolver.new(&NET_HTTP_REF_RESOLVER)
+                              resolver.to_proc
+                            else
+                              DEFAULT_REF_RESOLVER
+                            end
+                          when Proc(URI, JSONHash?)
+                            configuration.ref_resolver.as(Proc(URI, JSONHash?))
                           else
                             DEFAULT_REF_RESOLVER
                           end
-                        when Proc(URI, JSONHash?)
-                          configuration.ref_resolver.as(Proc(URI, JSONHash?))
-                        else
-                          DEFAULT_REF_RESOLVER
-                        end
+      end
     end
 
     # Get regexp resolver proc
     def regexp_resolver : Proc(String, Regex?)
-      @regexp_resolver ||= case configuration.regexp_resolver
-                           when "ecma"
-                             resolver = CachedRegexpResolver.new(&ECMA_REGEXP_RESOLVER)
-                             resolver.to_proc
-                           when "ruby"
-                             resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
-                             resolver.to_proc
-                           when Proc(String, Regex?)
-                             configuration.regexp_resolver.as(Proc(String, Regex?))
-                           else
-                             resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
-                             resolver.to_proc
-                           end
+      @regexp_resolver || @lock.synchronize do
+        @regexp_resolver ||= case configuration.regexp_resolver
+                             when "ecma"
+                               resolver = CachedRegexpResolver.new(&ECMA_REGEXP_RESOLVER)
+                               resolver.to_proc
+                             when "ruby"
+                               resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
+                               resolver.to_proc
+                             when Proc(String, Regex?)
+                               configuration.regexp_resolver.as(Proc(String, Regex?))
+                             else
+                               resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
+                               resolver.to_proc
+                             end
+      end
     end
 
     # Fetch format validator
