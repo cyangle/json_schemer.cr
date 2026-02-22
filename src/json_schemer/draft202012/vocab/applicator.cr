@@ -354,6 +354,7 @@ module JsonSchemer
         # PatternProperties keyword
         class PatternProperties < Keyword
           @schemas : Hash(String, Schema) = {} of String => Schema
+          @compiled_patterns : Array({Regex, Schema}) = [] of {Regex, Schema}
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match corresponding `patternProperties` schemas"
@@ -361,6 +362,10 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_hash
+            @compiled_patterns = @schemas.map do |pattern, schema|
+              {root.resolve_regexp(pattern), schema}
+            end
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
@@ -371,8 +376,7 @@ module JsonSchemer
             evaluated = Set(String).new
             nested = [] of Result
 
-            @schemas.each do |pattern, pattern_schema|
-              regexp = root.resolve_regexp(pattern)
+            @compiled_patterns.each do |regexp, pattern_schema|
               instance.as_h.each do |key, val|
                 if regexp.matches?(key)
                   evaluated << key

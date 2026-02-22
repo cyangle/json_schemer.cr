@@ -10,6 +10,10 @@ module JsonSchemer
               raw
             elsif raw.is_a?(Float64)
               if raw == raw.floor
+                if raw > Int64::MAX.to_f64 || raw < Int64::MIN.to_f64
+                  raise InvalidSchema.new("Value for keyword '#{keyword_name}' is out of Int64 range")
+                end
+                raw.to_i64
                 raw.to_i64
               else
                 raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be an integer")

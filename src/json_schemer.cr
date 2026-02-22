@@ -62,9 +62,12 @@ module JsonSchemer
 
   # Ref resolver that fetches schemas via HTTP(S).
   #
-  # Uses `HTTP::Client` to fetch the content.
+  # Uses `HTTP::Client` to fetch the content with a 30-second timeout.
   NET_HTTP_REF_RESOLVER = ->(uri : URI) : JSONHash? {
-    response = HTTP::Client.get(uri)
+    client = HTTP::Client.new(uri)
+    client.connect_timeout = 30.seconds
+    client.read_timeout = 30.seconds
+    response = client.get(uri.request_target)
     JSONHash.from_json(response.body)
   }
 
