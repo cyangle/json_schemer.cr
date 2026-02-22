@@ -288,10 +288,12 @@ module JsonSchemer
         # We use strict equality for JSON values
         first_value = entries.first[0]
         conflict = entries.any? { |e| e[0] != first_value }
-
-        unless conflict
+        if conflict
+          # Log warning about conflicting defaults
+          conflicting_values = entries.map(&.[0].raw.inspect).uniq!
+          Log.warn { "Property default conflict at #{instance_ptr.empty? ? "root" : instance_ptr}/#{property}: multiple default values (#{conflicting_values.join(", ")}) detected, no default inserted" }
+        else
           results = entries.map { |e| {e[1], e[2]} }
-
           if yield(first_value, property, results)
             if apply_default(context, instance_ptr, property, first_value)
               inserted = true

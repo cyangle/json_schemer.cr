@@ -213,4 +213,108 @@ describe "Property Defaults" do
       schema.valid?(JSON.parse(%q({"count": "five"}))).should be_false
     end
   end
+  describe "default conflicts" do
+    it "logs warning when multiple allOf branches have conflicting defaults" do
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({
+          "allOf": [
+            {
+              "properties": {
+                "status": {"type": "string", "default": "active"}
+              }
+            },
+            {
+              "properties": {
+                "status": {"type": "string", "default": "inactive"}
+              }
+            }
+          ]
+        })).as_h,
+        insert_property_defaults: true
+      )
+
+      data = JSON.parse(%q({}))
+
+      # Capture log output
+      backend = Log::MemoryBackend.new
+      Log.builder.bind("*", :warn, backend)
+
+      schema.validate(data)
+      # Property should NOT be inserted due to conflict
+      data.as_h.has_key?("status").should be_false
+      found_conflict_warning = backend.entries.any? do |entry|
+        entry.message.includes?("default conflict") || entry.message.includes?("conflicting default")
+      end
+      found_conflict_warning.should be_true
+    end
+
+    it "applies default when allOf branches have same default values" do
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({
+          "allOf": [
+            {
+              "properties": {
+                "status": {"type": "string", "default": "active"}
+              }
+            },
+            {
+              "properties": {
+                "status": {"type": "string", "default": "active"}
+              }
+            }
+          ]
+        })).as_h,
+        insert_property_defaults: true
+      )
+
+      data = JSON.parse(%q({}))
+      schema.validate(data)
+
+      # Property SHOULD be inserted because defaults match
+      data.as_h["status"]?.try(&.as_s).should eq("active")
+    end
+
+    it "logs warning with property name and instance location" do
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({
+          "allOf": [
+            {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {"type": "boolean", "default": true}
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "config": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {"type": "boolean", "default": false}
+                  }
+                }
+              }
+            }
+          ]
+        })).as_h,
+        insert_property_defaults: true
+      )
+
+      data = JSON.parse(%q({"config": {}}))
+
+      backend = Log::MemoryBackend.new
+      Log.builder.bind("*", :warn, backend)
+      schema.validate(data)
+
+      # Should have logged warning with context
+      found_context_warning = backend.entries.any? do |entry|
+        entry.message.includes?("/config/enabled") ||
+          (entry.message.includes?("enabled") && entry.message.includes?("config"))
+      end
+      found_context_warning.should be_true
+    end
+  end
 end
