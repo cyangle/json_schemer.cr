@@ -288,7 +288,20 @@ module JsonSchemer
           def after_schema_initialize : Nil
             min_kw = schema.parsed["minContains"]?
             if min_kw.is_a?(Keyword)
-              @min_contains = (min_kw.value.as_i? || min_kw.value.as_f).to_i
+              raw = min_kw.value.raw
+              if raw.is_a?(Int64)
+                if raw < 0
+                  raise InvalidSchema.new("Value for keyword 'minContains' must be a non-negative integer")
+                end
+                @min_contains = raw.to_i
+              elsif raw.is_a?(Float64)
+                if raw < 0 || raw != raw.floor
+                  raise InvalidSchema.new("Value for keyword 'minContains' must be a non-negative integer")
+                end
+                @min_contains = raw.to_i
+              else
+                raise InvalidSchema.new("Value for keyword 'minContains' must be a number")
+              end
             end
           end
 
