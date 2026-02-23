@@ -83,8 +83,6 @@ module JsonSchemer
         @adjacent_results = nil
         @depth = 0
         @discriminator_skip.clear
-        @short_circuit = short_circuit
-        @access_mode = access_mode
         self
       end
     end
@@ -299,20 +297,32 @@ module JsonSchemer
     #
     # The instance must be a `JSON::Any` or a JSON `String`.
     #
+    # For high-throughput scenarios, you can reuse a Context object by passing it
+    # as the `context` parameter. This avoids allocation overhead for each validation.
+    #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
     # schema.valid?(JSON::Any.new(10_i64)) # => true
     # schema.valid?("10")                  # => true (parsed as 10)
     # schema.valid?("\"10\"")              # => false (parsed as "10")
+    #
+    # # High-throughput usage with context reuse
+    # context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+    # 1000.times do |i|
+    #   context.reset(JSON::Any.new(i))
+    #   schema.valid?(JSON::Any.new(i), context: context)
+    # end
     # ```
     def valid?(
       instance : JSON::Any | String,
       access_mode : String? = nil,
+      context : Context? = nil,
     ) : Bool
       validate(
         instance,
         output_format: "flag",
-        access_mode: access_mode || configuration.access_mode
+        access_mode: access_mode || configuration.access_mode,
+        context: context,
       )["valid"].as_bool
     end
 
