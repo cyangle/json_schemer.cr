@@ -1,5 +1,7 @@
 module JsonSchemer
   module OpenAPI3
+    @@lock = Mutex.new(protection: :reentrant)
+
     # Data files embedded at compile time - all files from data/oas directory
     # OpenAPI 3.1 files (only those referenced by build_entrypoint_by_dialect)
     OAS_3_1_DIALECT_2024_10_25_JSON     = {{ read_file("#{__DIR__}/../../../data/oas/3.1/dialect/2024-10-25") }}
@@ -64,18 +66,23 @@ module JsonSchemer
     # OpenAPI formats
     FORMATS = {
       "int32" => ->(instance : JSON::Any, _format : String) {
-        !Draft202012::Vocab::Validation::Type.valid_integer?(instance) ||
-        instance.raw.as(Number).to_i64.abs.bit_length < 32
+        return true unless Draft202012::Vocab::Validation::Type.valid_integer?(instance)
+        value = instance.raw.as(Number).to_i64
+        value >= Int32::MIN && value <= Int32::MAX
       },
       "int64" => ->(instance : JSON::Any, _format : String) {
-        !Draft202012::Vocab::Validation::Type.valid_integer?(instance) ||
-        instance.raw.as(Number).to_i64.abs.bit_length < 64
+        return true unless Draft202012::Vocab::Validation::Type.valid_integer?(instance)
+        # Any value that fits in Int64 is valid for int64 format
+        # If it parsed as Int64, it fits in Int64.
+        true
       },
       "float" => ->(instance : JSON::Any, _format : String) {
-        !instance.raw.is_a?(Number) || instance.raw.is_a?(Float64)
+        return true unless instance.raw.is_a?(Number)
+        true # Any number is valid for float
       },
       "double" => ->(instance : JSON::Any, _format : String) {
-        !instance.raw.is_a?(Number) || instance.raw.is_a?(Float64)
+        return true unless instance.raw.is_a?(Number)
+        true # Any number is valid for double
       },
       "password" => ->(_instance : JSON::Any, _format : String) {
         true
@@ -95,12 +102,14 @@ module JsonSchemer
         return schema
       end
 
-      if json = SCHEMA_SOURCES[uri]?
-        return schemas[uri] = JSONHash.from_json(json)
-      end
+      @@lock.synchronize do
+        if json = SCHEMA_SOURCES[uri]?
+          return schemas[uri] ||= JSONHash.from_json(json)
+        end
 
-      if schema = JsonSchemer::Draft202012::Meta::SCHEMAS[uri]?
-        return schemas[uri] = schema
+        if schema = JsonSchemer::Draft202012::Meta::SCHEMAS[uri]?
+          return schemas[uri] ||= schema
+        end
       end
     end
 
@@ -110,27 +119,32 @@ module JsonSchemer
     end
 
     @@document_schemas = {} of URI => Schema
+    @@entrypoint_by_dialect : Hash(String, URI)?
 
     # Get the cached document schema for a given entrypoint URI
     def self.document_schema(entrypoint_uri : URI) : Schema
-      @@document_schemas[entrypoint_uri] ||= Schema.new(
-        resolve_schema!(entrypoint_uri),
-        ref_resolver: SCHEMAS_RESOLVER,
-        regexp_resolver: "ecma"
-      )
+      @@document_schemas[entrypoint_uri]? || @@lock.synchronize do
+        @@document_schemas[entrypoint_uri] ||= Schema.new(
+          resolve_schema!(entrypoint_uri),
+          ref_resolver: SCHEMAS_RESOLVER,
+          regexp_resolver: "ecma"
+        )
+      end
     end
 
     # Entrypoint schemas for document validation, keyed by jsonSchemaDialect value
     # Each entry contains the schema-base URI for that dialect
-    class_getter entrypoint_by_dialect : Hash(String, URI) do
-      {
-        # 3.1 json schema dialects to schema-base mapping
-        OAS_3_1_DIALECT_BASE_URI.to_s       => OAS_3_1_SCHEMA_BASE_2022_10_07_URI,
-        OAS_3_1_DIALECT_2024_10_25_URI.to_s => OAS_3_1_SCHEMA_BASE_2024_11_14_URI,
-        OAS_3_1_DIALECT_2024_11_10_URI.to_s => OAS_3_1_SCHEMA_BASE_2025_09_15_URI,
-        # 3.2 json schema dialects to schema-base mapping
-        OAS_3_2_DIALECT_2025_09_17_URI.to_s => OAS_3_2_SCHEMA_BASE_2025_09_17_URI,
-      } of String => URI
+    def self.entrypoint_by_dialect : Hash(String, URI)
+      @@entrypoint_by_dialect || @@lock.synchronize do
+        @@entrypoint_by_dialect ||= {
+          # 3.1 json schema dialects to schema-base mapping
+          OAS_3_1_DIALECT_BASE_URI.to_s       => OAS_3_1_SCHEMA_BASE_2022_10_07_URI,
+          OAS_3_1_DIALECT_2024_10_25_URI.to_s => OAS_3_1_SCHEMA_BASE_2024_11_14_URI,
+          OAS_3_1_DIALECT_2024_11_10_URI.to_s => OAS_3_1_SCHEMA_BASE_2025_09_15_URI,
+          # 3.2 json schema dialects to schema-base mapping
+          OAS_3_2_DIALECT_2025_09_17_URI.to_s => OAS_3_2_SCHEMA_BASE_2025_09_17_URI,
+        } of String => URI
+      end
     end
 
     # Select the appropriate entrypoint schema for an OpenAPI document

@@ -22,6 +22,7 @@ module JsonSchemer
     getter max_size : Int32
 
     def initialize(@max_size : Int32)
+      raise ArgumentError.new("max_size must be > 0") if @max_size <= 0
     end
 
     def get(key : K) : V?

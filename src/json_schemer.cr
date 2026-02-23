@@ -12,11 +12,13 @@ require "hana"
 {% end %}
 
 require "./json_schemer/version"
+require "./json_schemer/constants"
 require "./json_schemer/errors"
 require "./json_schemer/location"
 require "./json_schemer/resources"
 require "./json_schemer/cached_resolver"
 require "./json_schemer/ecma_regexp"
+require "./json_schemer/regexp_helper"
 require "./json_schemer/format"
 require "./json_schemer/content"
 require "./json_schemer/output"
@@ -41,6 +43,7 @@ require "./json_schemer/schema"
 require "./json_schemer/openapi"
 
 module JsonSchemer
+  @@init_mutex = Mutex.new(protection: :reentrant)
   CATCHALL = "*"
 
   # Type alias for JSON hash
@@ -54,6 +57,9 @@ module JsonSchemer
 
   WINDOWS_URI_PATH_REGEX = /\A\/[a-z]:/i
 
+  # Maximum allowed size for fetched schema responses (10 MB).
+  MAX_SCHEMA_SIZE = 10 * 1024 * 1024
+
   # Default ref resolver that raises `UnknownRef` for any external reference.
   DEFAULT_REF_RESOLVER = ->(uri : URI) : JSONHash? {
     raise UnknownRef.new(uri.to_s)
@@ -61,10 +67,27 @@ module JsonSchemer
 
   # Ref resolver that fetches schemas via HTTP(S).
   #
-  # Uses `HTTP::Client` to fetch the content.
+  # Uses `HTTP::Client` to fetch the content with a 30-second timeout.
+  # Limits response body size to `MAX_SCHEMA_SIZE` to prevent OOM from
+  # malicious or misconfigured endpoints.
   NET_HTTP_REF_RESOLVER = ->(uri : URI) : JSONHash? {
-    response = HTTP::Client.get(uri)
-    JSONHash.from_json(response.body)
+    client = HTTP::Client.new(uri)
+    client.connect_timeout = 30.seconds
+    client.read_timeout = 30.seconds
+    body = ""
+    client.get(uri.request_target) do |response|
+      content_length = response.headers["Content-Length"]?.try(&.to_i64?)
+      if content_length && content_length > MAX_SCHEMA_SIZE
+        raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes (Content-Length: #{content_length})")
+      end
+      buf = IO::Memory.new
+      bytes_read = IO.copy(response.body_io, buf, MAX_SCHEMA_SIZE + 1)
+      if bytes_read > MAX_SCHEMA_SIZE
+        raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes")
+      end
+      body = buf.to_s
+    end
+    JSONHash.from_json(body)
   }
 
   # Ref resolver that reads schemas from the local filesystem.
@@ -148,6 +171,7 @@ module JsonSchemer
     output_format : String? = nil,
     access_mode : String? = nil,
     max_depth : Int32? = nil,
+    regexp_filter : Proc(String, Bool)? = nil,
   ) : Schema
     resolved_schema, resolved_base_uri, resolved_ref_resolver = resolve_schema(schema, base_uri, ref_resolver)
     Schema.new(
@@ -166,7 +190,8 @@ module JsonSchemer
       regexp_resolver: regexp_resolver,
       output_format: output_format,
       access_mode: access_mode,
-      max_depth: max_depth
+      max_depth: max_depth,
+      regexp_filter: regexp_filter
     )
   end
 
@@ -215,80 +240,94 @@ module JsonSchemer
 
   # Get draft 2020-12 meta schema
   def self.draft202012 : Schema
-    @@draft202012 ||= Schema.new(
-      Draft202012::SCHEMA,
-      base_uri: Draft202012::BASE_URI,
-      formats: Draft202012::FORMATS,
-      content_encodings: Draft202012::CONTENT_ENCODINGS,
-      content_media_types: Draft202012::CONTENT_MEDIA_TYPES,
-      ref_resolver: Draft202012::Meta::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
+    @@draft202012 || @@init_mutex.synchronize do
+      @@draft202012 ||= Schema.new(
+        Draft202012::SCHEMA,
+        base_uri: Draft202012::BASE_URI,
+        formats: Draft202012::FORMATS,
+        content_encodings: Draft202012::CONTENT_ENCODINGS,
+        content_media_types: Draft202012::CONTENT_MEDIA_TYPES,
+        ref_resolver: Draft202012::Meta::SCHEMAS_RESOLVER,
+        regexp_resolver: "ecma"
+      )
+    end
   end
 
   # Get OpenAPI 3.1 dialect schema (for validating schemas with $schema: https://spec.openapis.org/oas/3.1/dialect/...)
   # Get OpenAPI 3.1 dialect 2024-11-10 schema
   def self.openapi31_dialect_2024_11_10 : Schema
-    @@openapi31_dialect_2024_11_10 ||= Schema.new(
-      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_2024_11_10_URI),
-      base_uri: OpenAPI3::OAS_3_1_DIALECT_2024_11_10_URI,
-      formats: OpenAPI3::FORMATS,
-      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
+    @@openapi31_dialect_2024_11_10 || @@init_mutex.synchronize do
+      @@openapi31_dialect_2024_11_10 ||= Schema.new(
+        OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_2024_11_10_URI),
+        base_uri: OpenAPI3::OAS_3_1_DIALECT_2024_11_10_URI,
+        formats: OpenAPI3::FORMATS,
+        ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+        regexp_resolver: "ecma"
+      )
+    end
   end
 
   # Get OpenAPI 3.1 dialect base schema
   def self.openapi31_dialect_base : Schema
-    @@openapi31_dialect_base ||= Schema.new(
-      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_BASE_URI),
-      base_uri: OpenAPI3::OAS_3_1_DIALECT_BASE_URI,
-      formats: OpenAPI3::FORMATS,
-      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
+    @@openapi31_dialect_base || @@init_mutex.synchronize do
+      @@openapi31_dialect_base ||= Schema.new(
+        OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_BASE_URI),
+        base_uri: OpenAPI3::OAS_3_1_DIALECT_BASE_URI,
+        formats: OpenAPI3::FORMATS,
+        ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+        regexp_resolver: "ecma"
+      )
+    end
   end
 
   # Get OpenAPI 3.1 dialect 2024-10-25 schema
   def self.openapi31_dialect_2024_10_25 : Schema
-    @@openapi31_dialect_2024_10_25 ||= Schema.new(
-      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_2024_10_25_URI),
-      base_uri: OpenAPI3::OAS_3_1_DIALECT_2024_10_25_URI,
-      formats: OpenAPI3::FORMATS,
-      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
+    @@openapi31_dialect_2024_10_25 || @@init_mutex.synchronize do
+      @@openapi31_dialect_2024_10_25 ||= Schema.new(
+        OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_DIALECT_2024_10_25_URI),
+        base_uri: OpenAPI3::OAS_3_1_DIALECT_2024_10_25_URI,
+        formats: OpenAPI3::FORMATS,
+        ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+        regexp_resolver: "ecma"
+      )
+    end
   end
 
   # Get OpenAPI 3.1 document schema (entrypoint for validating OpenAPI 3.1 documents)
   # Uses the appropriate schema-base based on jsonSchemaDialect or openapi version
   def self.openapi31_document : Schema
-    @@openapi31_document ||= Schema.new(
-      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_SCHEMA_BASE_2025_09_15_URI),
-      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
+    @@openapi31_document || @@init_mutex.synchronize do
+      @@openapi31_document ||= Schema.new(
+        OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_1_SCHEMA_BASE_2025_09_15_URI),
+        ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+        regexp_resolver: "ecma"
+      )
+    end
   end
 
   # Get OpenAPI 3.2 dialect schema
   # Get OpenAPI 3.2 dialect 2025-09-17 schema
   def self.openapi32_dialect_2025_09_17 : Schema
-    @@openapi32_dialect_2025_09_17 ||= Schema.new(
-      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_2_DIALECT_2025_09_17_URI),
-      base_uri: OpenAPI3::OAS_3_2_DIALECT_2025_09_17_URI,
-      formats: OpenAPI3::FORMATS,
-      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
+    @@openapi32_dialect_2025_09_17 || @@init_mutex.synchronize do
+      @@openapi32_dialect_2025_09_17 ||= Schema.new(
+        OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_2_DIALECT_2025_09_17_URI),
+        base_uri: OpenAPI3::OAS_3_2_DIALECT_2025_09_17_URI,
+        formats: OpenAPI3::FORMATS,
+        ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+        regexp_resolver: "ecma"
+      )
+    end
   end
 
   # Get OpenAPI 3.2 document schema (alias for openapi3_document)
   def self.openapi32_document : Schema
-    @@openapi32_document ||= Schema.new(
-      OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_2_SCHEMA_BASE_2025_09_17_URI),
-      ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
-      regexp_resolver: "ecma"
-    )
+    @@openapi32_document || @@init_mutex.synchronize do
+      @@openapi32_document ||= Schema.new(
+        OpenAPI3.resolve_schema!(OpenAPI3::OAS_3_2_SCHEMA_BASE_2025_09_17_URI),
+        ref_resolver: OpenAPI3::SCHEMAS_RESOLVER,
+        regexp_resolver: "ecma"
+      )
+    end
   end
 
   # Get OpenAPI 3.x document schema (uses entrypoint selection based on document content)
@@ -316,7 +355,9 @@ module JsonSchemer
 
   # Global configuration
   def self.configuration : Configuration
-    @@configuration ||= Configuration.new
+    @@configuration || @@init_mutex.synchronize do
+      @@configuration ||= Configuration.new
+    end
   end
 
   # Configures global defaults for `JsonSchemer`.

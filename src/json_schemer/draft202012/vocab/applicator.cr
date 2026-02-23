@@ -275,6 +275,7 @@ module JsonSchemer
         # Contains keyword
         class Contains < Keyword
           @subschema : Schema?
+          @min_contains : Int32 = 1
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "array at #{formatted_instance_location} does not contain enough items that match `contains` schema"
@@ -282,6 +283,26 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @subschema = subschema(value)
+          end
+
+          def after_schema_initialize : Nil
+            min_kw = schema.parsed["minContains"]?
+            if min_kw.is_a?(Keyword)
+              raw = min_kw.value.raw
+              if raw.is_a?(Int64)
+                if raw < 0
+                  raise InvalidSchema.new("Value for keyword 'minContains' must be a non-negative integer")
+                end
+                @min_contains = raw.to_i
+              elsif raw.is_a?(Float64)
+                if raw < 0 || raw != raw.floor
+                  raise InvalidSchema.new("Value for keyword 'minContains' must be a non-negative integer")
+                end
+                @min_contains = raw.to_i
+              else
+                raise InvalidSchema.new("Value for keyword 'minContains' must be a number")
+              end
+            end
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
@@ -298,15 +319,7 @@ module JsonSchemer
 
             anno = nested.each_with_index.compact_map { |result, idx| idx.to_i64 if result.valid }.to_a
 
-            min_contains = schema.parsed["minContains"]?.try do |min_kw|
-              if min_kw.is_a?(Keyword)
-                (min_kw.value.as_i? || min_kw.value.as_f).to_i
-              else
-                1
-              end
-            end || 1
-
-            valid = anno.size >= min_contains
+            valid = anno.size >= @min_contains
             annotation_value = JSON::Any.new(anno.map { |i| JSON::Any.new(i) })
             result(instance, instance_location, location, valid, nested, result_annotation: annotation_value, ignore_nested: true)
           end
@@ -354,6 +367,7 @@ module JsonSchemer
         # PatternProperties keyword
         class PatternProperties < Keyword
           @schemas : Hash(String, Schema) = {} of String => Schema
+          @compiled_patterns : Array({Regex, Schema}) = [] of {Regex, Schema}
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "object properties at #{formatted_instance_location} do not match corresponding `patternProperties` schemas"
@@ -361,6 +375,10 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             @schemas = parse_subschema_hash
+            @compiled_patterns = @schemas.map do |pattern, schema|
+              {root.resolve_regexp(pattern), schema}
+            end
+            @schemas
           end
 
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
@@ -371,10 +389,9 @@ module JsonSchemer
             evaluated = Set(String).new
             nested = [] of Result
 
-            @schemas.each do |pattern, pattern_schema|
-              regexp = root.resolve_regexp(pattern)
+            @compiled_patterns.each do |regexp, pattern_schema|
               instance.as_h.each do |key, val|
-                if regexp.matches?(key)
+                if RegexpHelper.matches?(regexp, key)
                   evaluated << key
                   nested << pattern_schema.validate_instance(val, join_location(instance_location, key), context)
                 end

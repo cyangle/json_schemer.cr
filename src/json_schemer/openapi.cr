@@ -14,7 +14,7 @@ module JsonSchemer
       formats : Hash(String, Format::FormatValidator)? = nil,
       content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
       content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
-      keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Bool | Array(String)))? = nil,
+      keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
       insert_property_defaults : Bool = false,
       property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
@@ -26,7 +26,7 @@ module JsonSchemer
 
       version = document["openapi"]?.try(&.as_s)
       case version
-      when /\A3\.[12]\.\d+\z/
+      when /\A3\.[12]\.\d+(-.+)?\z/
         # Use the cached document schema based on entrypoint
         # The schema-base files have const values for jsonSchemaDialect
         entrypoint_uri = OpenAPI3.select_entrypoint(document)
@@ -111,7 +111,7 @@ module JsonSchemer
             root: @schema,
             configuration: @schema.configuration
           )
-        rescue
+        rescue ex : KeyError | IndexError | ArgumentError
           raise e
         end
       else

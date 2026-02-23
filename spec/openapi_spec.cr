@@ -406,13 +406,12 @@ describe "OpenAPI" do
 
       # float / double
       schemer.valid?(JSON.parse(%q({"c": 2.0}))).should be_true
-      schemer.valid?(JSON.parse(%q({"c": 2}))).should be_false # int is not float?
+      schemer.valid?(JSON.parse(%q({"c": 2}))).should be_true # int is valid float
       # In Ruby test: assert(schemer.valid?({ 'c' => 2.0 })); refute(schemer.valid?({ 'c' => 2 }))
-      # This implies `float` format requires Float type?
-      # Let's check OpenAPI31::FORMATS in src/json_schemer/openapi31/meta.cr
+      # However, JSON schema doesn't distinguish int vs float representation, any number fits float format if value fits.
 
       schemer.valid?(JSON.parse(%q({"d": 2.0}))).should be_true
-      schemer.valid?(JSON.parse(%q({"d": 2}))).should be_false
+      schemer.valid?(JSON.parse(%q({"d": 2}))).should be_true
 
       # password
       schemer.valid?(JSON.parse(%q({"e": "anything"}))).should be_true

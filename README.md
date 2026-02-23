@@ -111,7 +111,7 @@ dns_validator = JsonSchemer::Format::DnsHostnameValidator.new(ttl: 10.minutes)
 schema = JsonSchemer.schema(
   %q({"format": "hostname"}),
   format: true,
-  formats: {"hostname" => dns_validator}
+  formats: {"hostname" => dns_validator.to_proc}
 )
 
 schema.valid?(JSON::Any.new("google.com"))  # => true
@@ -216,7 +216,42 @@ schema = JsonSchemer.schema(
 ```
 
 See [USAGE.md](USAGE.md#class-based-custom-keywords) for a complete example including parsing configuration options.
+### 5. High-Throughput Validation (Context Reuse)
 
+For high-throughput scenarios validating many instances against the same schema, you can reuse a `Context` object to avoid allocation overhead.
+
+```crystal
+schema = JsonSchemer.schema(%q({"type": "integer"}))
+
+# Create a reusable context
+context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+
+# Reuse the context for multiple validations
+1000.times do |i|
+  context.reset(JSON::Any.new(i))
+  schema.valid?(JSON::Any.new(i), context: context)
+end
+```
+
+Both `valid?` and `validate` accept an optional `context` parameter:
+
+```crystal
+# With valid? (returns boolean)
+schema.valid?(data, context: context)
+
+# With validate (returns full result)
+schema.validate(data, context: context)
+```
+
+> [!WARNING]
+> **Sequential Usage Only:** The `Context` object is **NOT thread-safe**. Each context should only be used by a single fiber/thread at a time.
+> 
+> - ✅ **Correct:** Reuse a context in a single loop or sequential processing
+> - ❌ **Incorrect:** Share a context across concurrent fibers or threads
+> 
+> For concurrent validation, create a separate `Context` per fiber/thread, or use a thread-local context pool.
+
+See [USAGE.md](USAGE.md#high-throughput-validation) for more details.
 ## Configuration Reference
 
 This section provides a complete reference for all configuration options available when creating schemas.
@@ -238,6 +273,7 @@ This section provides a complete reference for all configuration options availab
 | `output_format` | `String` | `"classic"` | Output format: `"flag"`, `"basic"`, `"classic"`, `"detailed"`, or `"verbose"` |
 | `access_mode` | `String?` | `nil` | Access mode: `"read"` or `"write"` |
 | `max_depth` | `Int32` | `50` | Maximum recursion depth for security |
+| `regexp_filter` | `Proc(String, Bool)?` | `nil` | Custom filter for regular expressions |
 | `insert_property_defaults` | `Bool` | `false` | Insert default values and mutate input instance |
 | `property_default_resolver` | `Proc?` | `nil` | Custom resolver for property defaults |
 
@@ -555,7 +591,20 @@ JSON Schema allows recursive definitions (e.g., using `{"$ref": "#"}`). To preve
 
 ### Regular Expression Denial of Service (ReDoS)
 The `pattern` and `patternProperties` keywords use Crystal's standard `Regex` (PCRE). Malicious regular expressions in a schema, or specially crafted string payloads against vulnerable regexes, can cause catastrophic backtracking and exhaust CPU resources.
-* **Recommendation:** Do not accept untrusted schemas without sanitizing or restricting regexes. If you must accept user-defined regexes, consider the potential for ReDoS attacks on your service.
+
+`json_schemer` provides several layers of protection:
+* **Backtracking Limits:** The library automatically catches backtrack limit exceeded errors from PCRE and raises a `JsonSchemer::RegexMatchLimitExceeded` exception instead of allowing the process to hang or crash.
+* **Pattern Filtering:** You can restrict which regular expressions are allowed in schemas using allowlists, denylists, or custom filter procs.
+
+```crystal
+# Use a custom filter to limit pattern complexity/length
+schema = JsonSchemer.schema(
+  schema_hash,
+  regexp_filter: ->(pattern : String) { pattern.size < 100 }
+)
+```
+
+* **Recommendation:** Only accept trusted schemas. If you must accept user-defined schemas, always use `regexp_filter` to restrict regular expression patterns.
 
 ### Server-Side Request Forgery (SSRF) and Local File Inclusion (LFI)
 By default, external `$ref` pointers are disabled and will safely raise an `UnknownRef` error.

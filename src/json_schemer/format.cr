@@ -6,7 +6,7 @@ module JsonSchemer
   module Format
     # Regex patterns
     DATE_TIME_OFFSET_REGEX      = /(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
-    DATE_TIME_SEPARATOR_CLASS   = "[Tt\\s]"
+    DATE_TIME_SEPARATOR_CLASS   = "[Tt]"
     HOUR_24_REGEX               = /#{DATE_TIME_SEPARATOR_CLASS}24:/
     LEAP_SECOND_REGEX           = /#{DATE_TIME_SEPARATOR_CLASS}\d{2}:\d{2}:6/
     IP_REGEX                    = /\A[0-9a-fA-F:.]+\z/
@@ -27,9 +27,9 @@ module JsonSchemer
     TIME_REGEX = /\A[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
     # RFC 3339 date-time format with stricter timezone offset validation
     # Offset hours: 00-23, minutes: 00-59
-    DATE_TIME_REGEX = /\A[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt\s][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
+    DATE_TIME_REGEX = /\A[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[\+\-]([01][0-9]|2[0-3]):[0-5][0-9])\z/i
 
-    FRAGMENT_ENCODE_REGEX = /[^\w?\/:@\-.~!$&'()*+,;=]/
+    FRAGMENT_ENCODE_REGEX = ::JsonSchemer::FRAGMENT_ENCODE_REGEX
 
     # Validation constants
     MAX_HOUR            =  23
@@ -53,14 +53,14 @@ module JsonSchemer
     # valid ranges for date and time components, and handles leap seconds.
     def self.valid_date_time?(data : String) : Bool
       # Must match RFC 3339 format: YYYY-MM-DDTHH:MM:SS(.fraction)?(Z|+/-HH:MM)
-      return false unless DATE_TIME_REGEX.matches?(data)
+      return false unless RegexpHelper.matches?(DATE_TIME_REGEX, data)
 
       # Check for hour 24 which is not valid in RFC 3339
       return false if data.includes?("T24:") || data.includes?("t24:")
 
       # Extract date and time parts
       date_part = data[0, 10]
-      time_part_match = data.match(/[Tt\s](\d{2}):(\d{2}):(\d{2})/)
+      time_part_match = data.match(/[Tt](\d{2}):(\d{2}):(\d{2})/)
       return false unless time_part_match
 
       hour = time_part_match[1].to_i
@@ -83,7 +83,7 @@ module JsonSchemer
     # Checks for valid year, month, and day, including leap years.
     def self.valid_date?(data : String) : Bool
       # Must match RFC 3339 date format exactly: YYYY-MM-DD
-      return false unless DATE_REGEX.matches?(data)
+      return false unless RegexpHelper.matches?(DATE_REGEX, data)
 
       # Also validate it's a real date by parsing
       begin
@@ -104,7 +104,7 @@ module JsonSchemer
                         end
 
         day >= 1 && day <= days_in_month
-      rescue
+      rescue ex : ArgumentError
         false
       end
     end
@@ -120,7 +120,7 @@ module JsonSchemer
     # Checks for valid hour, minute, and second, including leap seconds.
     def self.valid_time?(data : String) : Bool
       # Must match RFC 3339 time format
-      return false unless TIME_REGEX.matches?(data)
+      return false unless RegexpHelper.matches?(TIME_REGEX, data)
 
       # Extract time parts
       time_match = data.match(/(\d{2}):(\d{2}):(\d{2})/)
@@ -144,7 +144,7 @@ module JsonSchemer
       # Must only use ASCII digits
       return false unless data.ascii_only?
 
-      return false unless DURATION_REGEX.matches?(data)
+      return false unless RegexpHelper.matches?(DURATION_REGEX, data)
 
       # Ensure at least one component is present after P
       return false if data.size <= 1
@@ -158,7 +158,7 @@ module JsonSchemer
         # W can only appear alone with P, like P2W or P1W
         # Invalid: P1Y2W, P1W1D, etc.
         # Valid patterns with W: P<digits>W only
-        return false unless data.matches?(/\AP[0-9]+W\z/)
+        return false unless RegexpHelper.matches?(/\AP[0-9]+W\z/, data)
       end
 
       # If there's a T, make sure there's content after it
@@ -181,7 +181,7 @@ module JsonSchemer
       else
         false
       end
-    rescue
+    rescue ex : Socket::Error
       false
     end
 
@@ -194,14 +194,14 @@ module JsonSchemer
     # Validates a URI string according to RFC 3986.
     def self.valid_uri?(data : String) : Bool
       return false unless data.ascii_only?
-      return false if URI_DISALLOWED_CHARS.matches?(data)
-      return false if URI_BRACKET_IN_USERINFO.matches?(data)
+      return false if RegexpHelper.matches?(URI_DISALLOWED_CHARS, data)
+      return false if RegexpHelper.matches?(URI_BRACKET_IN_USERINFO, data)
       begin
         uri = URI.parse(data)
-        return false if INVALID_QUERY_REGEX.matches?(uri.query || "")
+        return false if RegexpHelper.matches?(INVALID_QUERY_REGEX, uri.query || "")
         scheme = uri.scheme
         !scheme.nil? && !scheme.empty?
-      rescue
+      rescue ex : URI::Error
         false
       end
     end
@@ -209,13 +209,13 @@ module JsonSchemer
     # Validates a URI reference string (relative or absolute).
     def self.valid_uri_reference?(data : String) : Bool
       return false unless data.ascii_only?
-      return false if URI_DISALLOWED_CHARS.matches?(data)
-      return false if URI_BRACKET_IN_USERINFO.matches?(data)
+      return false if RegexpHelper.matches?(URI_DISALLOWED_CHARS, data)
+      return false if RegexpHelper.matches?(URI_BRACKET_IN_USERINFO, data)
       begin
         uri = URI.parse(data)
-        return false if INVALID_QUERY_REGEX.matches?(uri.query || "")
+        return false if RegexpHelper.matches?(INVALID_QUERY_REGEX, uri.query || "")
         true
-      rescue
+      rescue ex : URI::Error
         false
       end
     end
@@ -227,12 +227,12 @@ module JsonSchemer
 
     # Validates a JSON Pointer.
     def self.valid_json_pointer?(data : String) : Bool
-      JSON_POINTER_REGEX.matches?(data)
+      RegexpHelper.matches?(JSON_POINTER_REGEX, data)
     end
 
     # Validates a Relative JSON Pointer.
     def self.valid_relative_json_pointer?(data : String) : Bool
-      RELATIVE_JSON_POINTER_REGEX.matches?(data)
+      RegexpHelper.matches?(RELATIVE_JSON_POINTER_REGEX, data)
     end
 
     # Validates a hostname.
@@ -249,7 +249,7 @@ module JsonSchemer
         # Use SimpleIDN's hostname validation
         SimpleIDN.valid_hostname?(data)
       {% else %}
-        HOSTNAME_REGEX.matches?(data) && data.size <= MAX_HOSTNAME_LENGTH
+        RegexpHelper.matches?(HOSTNAME_REGEX, data) && data.size <= MAX_HOSTNAME_LENGTH
       {% end %}
     end
 
@@ -294,7 +294,7 @@ module JsonSchemer
         # Cannot have consecutive dots
         return false if local_part.includes?("..")
         # Must only contain valid characters
-        return false unless local_part.matches?(/\A[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+\z/)
+        return false unless RegexpHelper.matches?(/\A[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+\z/, local_part)
       end
 
       # Validate domain part
@@ -355,12 +355,12 @@ module JsonSchemer
 
     # Validates a UUID.
     def self.valid_uuid?(data : String) : Bool
-      UUID_REGEX.matches?(data) || data == NIL_UUID
+      RegexpHelper.matches?(UUID_REGEX, data)
     end
 
     # Validates a URI Template (RFC 6570).
     def self.valid_uri_template?(data : String) : Bool
-      URI_TEMPLATE_REGEX.matches?(data)
+      RegexpHelper.matches?(URI_TEMPLATE_REGEX, data)
     end
 
     # Validates a regular expression (ECMA-262).
@@ -416,8 +416,20 @@ module JsonSchemer
       domain_part : String
 
       if data.starts_with?('"')
-        # Quoted local part - find closing quote then @
-        closing_quote = data.index('"', 1)
+        # Quoted local part - find unescaped closing quote then @
+        closing_quote = nil
+        i = 1
+        while i < data.size
+          if data[i] == '\\'
+            i += 2 # Skip escaped character
+            next
+          elsif data[i] == '"'
+            closing_quote = i
+            break
+          end
+          i += 1
+        end
+
         return nil unless closing_quote
         return nil unless closing_quote + 1 < data.size && data[closing_quote + 1] == '@'
 

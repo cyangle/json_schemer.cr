@@ -13,7 +13,7 @@ module JsonSchemer
     #
     # ```
     # validator = DnsHostnameValidator.new(ttl: 10.minutes)
-    # JsonSchemer.schema(..., formats: {"hostname" => validator})
+    # JsonSchemer.schema(..., formats: {"hostname" => validator.to_proc})
     # ```
     class DnsHostnameValidator
       @resolver : DnsResolver
@@ -27,7 +27,7 @@ module JsonSchemer
       end
 
       # Validates the hostname using DNS.
-      # Matches the `Format::FormatValidator` proc signature when used as a callable object.
+      # Matches the `Format::FormatValidator` proc signature.
       def call(instance : JSON::Any, format : String) : Bool
         # 1. Check if it's a string
         return true unless instance.as_s?
@@ -39,18 +39,23 @@ module JsonSchemer
 
         # 3. Perform DNS lookup
         case @resolver.resolve(hostname)
-        when :found
+        when DnsResolver::DnsResult::Found
           true
-        when :not_found
+        when DnsResolver::DnsResult::NotFound
           # Domain definitely does not exist
           false
-        when :error
+        when DnsResolver::DnsResult::Error
           # DNS lookup failed (network error, timeout, etc.)
           # Fallback to syntax validation (which already passed at step 2)
           true
         else
           true
         end
+      end
+
+      # Returns a proc that can be used as a format validator.
+      def to_proc : FormatValidator
+        ->call(JSON::Any, String)
       end
     end
   end

@@ -6,25 +6,33 @@ module JsonSchemer
         module ParseIntLimit
           def parse_int_limit(keyword_name : String) : Int64
             raw = value.raw
-            if raw.is_a?(Int64)
-              raw
-            elsif raw.is_a?(Float64)
-              if raw == raw.floor
-                raw.to_i64
-              else
-                raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be an integer")
-              end
-            else
-              raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be a number")
+            val = if raw.is_a?(Int64)
+                    raw
+                  elsif raw.is_a?(Float64)
+                    if raw == raw.floor
+                      if raw > Int64::MAX.to_f64 || raw < Int64::MIN.to_f64
+                        raise InvalidSchema.new("Value for keyword '#{keyword_name}' is out of Int64 range")
+                      end
+                      raw.to_i64
+                    else
+                      raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be an integer")
+                    end
+                  else
+                    raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be a number")
+                  end
+
+            if val < 0
+              raise InvalidSchema.new("Value for keyword '#{keyword_name}' must be a non-negative integer")
             end
+            val
           end
         end
 
         # Base class for numeric limit keywords
         abstract class NumericLimit < Keyword
-          @limit : Float64 = 0.0
+          @limit : BigDecimal = BigDecimal.new(0)
 
-          abstract def compare(value : Float64, limit : Float64) : Bool
+          abstract def compare(value : BigDecimal, limit : BigDecimal) : Bool
           abstract def limit_name : String
           abstract def error_message_relation : String
 
@@ -36,7 +44,7 @@ module JsonSchemer
             unless value.raw.is_a?(Number)
               raise InvalidSchema.new("Value for keyword '#{limit_name}' must be a number")
             end
-            @limit = value.raw.as(Number).to_f64
+            @limit = BigDecimal.new(value.raw.as(Number).to_s)
             value
           end
 
@@ -44,7 +52,7 @@ module JsonSchemer
             unless instance.raw.is_a?(Number)
               return result(instance, instance_location, location, true)
             end
-            valid = compare(instance.raw.as(Number).to_f64, @limit)
+            valid = compare(BigDecimal.new(instance.raw.as(Number).to_s), @limit)
             result(instance, instance_location, location, valid)
           end
         end
@@ -179,9 +187,8 @@ module JsonSchemer
 
         # MultipleOf keyword
         class MultipleOf < Keyword
-          # Default value 0 is always valid against all numbers
-          # It will be overwritten by parse method via initialize method
-          @multiple_of_value : BigDecimal = BigDecimal.new(0)
+          # Default value 1 is safe - parse validates and sets the actual value
+          @multiple_of_value : BigDecimal = BigDecimal.new(1)
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             "number at #{formatted_instance_location} is not a multiple of: #{value}"
@@ -193,6 +200,9 @@ module JsonSchemer
             end
             # Potential issue of losing precision when converting to BigDecimal
             @multiple_of_value = BigDecimal.new(value.raw.as(Number).to_s)
+            if @multiple_of_value <= BigDecimal.new(0)
+              raise InvalidSchema.new("Value for keyword 'multipleOf' must be strictly greater than 0")
+            end
             value
           end
 
@@ -209,9 +219,7 @@ module JsonSchemer
 
         # Maximum keyword
         class Maximum < NumericLimit
-          @limit : Float64 = Float64::INFINITY
-
-          def compare(value : Float64, limit : Float64) : Bool
+          def compare(value : BigDecimal, limit : BigDecimal) : Bool
             value <= limit
           end
 
@@ -226,9 +234,7 @@ module JsonSchemer
 
         # ExclusiveMaximum keyword
         class ExclusiveMaximum < NumericLimit
-          @limit : Float64 = Float64::INFINITY
-
-          def compare(value : Float64, limit : Float64) : Bool
+          def compare(value : BigDecimal, limit : BigDecimal) : Bool
             value < limit
           end
 
@@ -243,9 +249,7 @@ module JsonSchemer
 
         # Minimum keyword
         class Minimum < NumericLimit
-          @limit : Float64 = -Float64::INFINITY
-
-          def compare(value : Float64, limit : Float64) : Bool
+          def compare(value : BigDecimal, limit : BigDecimal) : Bool
             value >= limit
           end
 
@@ -260,9 +264,7 @@ module JsonSchemer
 
         # ExclusiveMinimum keyword
         class ExclusiveMinimum < NumericLimit
-          @limit : Float64 = -Float64::INFINITY
-
-          def compare(value : Float64, limit : Float64) : Bool
+          def compare(value : BigDecimal, limit : BigDecimal) : Bool
             value > limit
           end
 
@@ -339,7 +341,7 @@ module JsonSchemer
             end
             regex = @regex
             return result(instance, instance_location, location, true) unless regex
-            valid = regex.matches?(instance.as_s)
+            valid = RegexpHelper.matches?(regex, instance.as_s)
             result(instance, instance_location, location, valid)
           end
         end
@@ -527,9 +529,12 @@ module JsonSchemer
 
         # Required keyword
         class Required < Keyword
+          # Maximum depth for BFS traversal to prevent excessive work on large schemas.
+          # This is separate from the validation max_depth as it's a different traversal context.
+          MAX_BFS_DEPTH = 50
           @required_keys : Array(String) = [] of String
-          @effective_keys_read : Array(String) = [] of String
-          @effective_keys_write : Array(String) = [] of String
+          @effective_keys_read : (Array(String) | Nil) = nil
+          @effective_keys_write : (Array(String) | Nil) = nil
 
           def error(formatted_instance_location : String, details : Hash(String, JSON::Any)? = nil) : String
             missing = details.try(&.["missing_keys"]?.try(&.as_a.map(&.as_s).join(", "))) || ""
@@ -538,8 +543,6 @@ module JsonSchemer
 
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Array(String) | Hash(String, Array(String)) | Regex | Nil
             @required_keys = value.as_a.map(&.as_s)
-            @effective_keys_read = @required_keys
-            @effective_keys_write = @required_keys
             @required_keys
           end
 
@@ -550,9 +553,19 @@ module JsonSchemer
 
             effective_required_keys = case context.access_mode
                                       when "read"
-                                        @effective_keys_read
+                                        keys = @effective_keys_read
+                                        if keys.nil?
+                                          keys = calculate_effective_keys("read")
+                                          @effective_keys_read = keys
+                                        end
+                                        keys
                                       when "write"
-                                        @effective_keys_write
+                                        keys = @effective_keys_write
+                                        if keys.nil?
+                                          keys = calculate_effective_keys("write")
+                                          @effective_keys_write = keys
+                                        end
+                                        keys
                                       else
                                         @required_keys
                                       end
@@ -567,22 +580,59 @@ module JsonSchemer
             end
           end
 
+          # BFS traversal to find readOnly/writeOnly properties across the schema graph.
+          # Traversal is bounded by MAX_BFS_DEPTH to prevent excessive work on large schemas.
           private def calculate_effective_keys(mode : String) : Array(String)
-            # Calculate
             inapplicable = [] of String
+            # Each entry: {schema, depth}
+            queue = Deque(Tuple(Schema, Int32)).new
+            queue << {schema, 0}
+            visited = Set(Schema).new
+            while !queue.empty?
+              current = queue.shift
+              s = current[0]
+              depth = current[1]
 
-            # Note: We access the parent schema's raw properties to determine readOnly/writeOnly
-            properties_kw = schema.parsed["properties"]?
-            if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
-              properties_kw.parsed.as(Hash(String, Schema)).each do |property, subschema|
-                read_only = subschema.parsed["readOnly"]?
-                write_only = subschema.parsed["writeOnly"]?
+              # Skip if already visited
+              next if visited.includes?(s)
+              visited << s
+              # Stop traversing deeper if max depth exceeded
+              if depth >= MAX_BFS_DEPTH
+                next
+              end
+              # Use _keywords_lock if necessary, but here we just read parsed
+              properties_kw = s.parsed.try(&.["properties"]?)
+              if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
+                properties_kw.parsed.as(Hash(String, Schema)).each do |property, subschema|
+                  read_only = subschema.parsed.try(&.["readOnly"]?)
+                  write_only = subschema.parsed.try(&.["writeOnly"]?)
 
-                if mode == "write" && read_only.try(&.value.as_bool?) == true
-                  inapplicable << property
+                  if mode == "write" && read_only.try(&.value.as_bool?) == true
+                    inapplicable << property
+                  end
+                  if mode == "read" && write_only.try(&.value.as_bool?) == true
+                    inapplicable << property
+                  end
                 end
-                if mode == "read" && write_only.try(&.value.as_bool?) == true
-                  inapplicable << property
+              end
+
+              # Follow $ref
+              if ref_kw = s.parsed.try(&.["$ref"]?)
+                if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
+                  begin
+                    queue << {ref_kw.ref_schema, depth + 1}
+                  rescue InvalidRefResolution | InvalidRefPointer | UnknownRef
+                    # Skip unresolvable refs during access mode calculation
+                  end
+                end
+              end
+
+              # Follow allOf, anyOf, oneOf
+              {"allOf", "anyOf", "oneOf"}.each do |applicator_key|
+                if app_kw = s.parsed.try(&.[applicator_key]?)
+                  if app_kw.is_a?(Keyword) && app_kw.parsed.is_a?(Array(Schema))
+                    app_kw.parsed.as(Array(Schema)).each { |sub| queue << {sub, depth + 1} }
+                  end
                 end
               end
             end
@@ -591,8 +641,8 @@ module JsonSchemer
           end
 
           def after_schema_initialize : Nil
-            @effective_keys_read = calculate_effective_keys("read")
-            @effective_keys_write = calculate_effective_keys("write")
+            # Deferred to lazy initialization during validation
+            # to avoid $ref resolution cycles during schema parsing
           end
         end
 

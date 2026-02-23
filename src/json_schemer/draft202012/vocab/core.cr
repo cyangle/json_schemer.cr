@@ -5,7 +5,9 @@ module JsonSchemer
         # $schema keyword
         class SchemaKeyword < Keyword
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            value_str = value.as_s
+            unless value_str = value.as_s?
+              raise InvalidSchema.new("$schema must be a string, got: #{value.raw.class}")
+            end
             new_meta_schema = if value_str == schema.base_uri.to_s
                                 schema
                               else
@@ -26,7 +28,11 @@ module JsonSchemer
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             vocabularies = {} of String => Hash(String, Keyword.class)
 
-            value.as_h.each do |vocab, required|
+            unless vocab_hash = value.as_h?
+              raise InvalidSchema.new("$vocabulary must be an object, got: #{value.raw.class}")
+            end
+
+            vocab_hash.each do |vocab, required|
               if JsonSchemer::VOCABULARIES.has_key?(vocab)
                 vocabularies[vocab] = JsonSchemer::VOCABULARIES[vocab]
               elsif required.as_bool
@@ -61,7 +67,10 @@ module JsonSchemer
         # $id keyword
         class Id < Keyword
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
-            uri = URI.parse(value.as_s)
+            unless value_str = value.as_s?
+              raise InvalidSchema.new("$id must be a string, got: #{value.raw.class}")
+            end
+            uri = URI.parse(value_str)
             resolved = schema.base_uri.resolve(uri)
             schema.base_uri = resolved
             root.resources[:lexical][resolved] = schema
@@ -73,7 +82,10 @@ module JsonSchemer
         class Anchor < Keyword
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             uri = schema.base_uri.dup
-            uri.fragment = value.as_s
+            unless value_str = value.as_s?
+              raise InvalidSchema.new("$anchor must be a string, got: #{value.raw.class}")
+            end
+            uri.fragment = value_str
             root.resources[:lexical][uri] = schema
             value
           end
@@ -89,7 +101,12 @@ module JsonSchemer
           end
 
           def ref_uri : URI
-            @ref_uri ||= resolve_uri_reference(schema.base_uri, value.as_s)
+            @ref_uri ||= begin
+              unless value_str = value.as_s?
+                raise InvalidSchema.new("$ref must be a string, got: #{value.raw.class}")
+              end
+              resolve_uri_reference(schema.base_uri, value_str)
+            end
           end
 
           def ref_schema : Schema
@@ -99,26 +116,16 @@ module JsonSchemer
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             ref_schema.validate_instance(instance, instance_location, context)
           end
-
-          private def resolve_uri_reference(base : URI, ref_str : String) : URI
-            ref = URI.parse(ref_str)
-            # Handle fragment-only refs for opaque URIs (like urn:)
-            # Crystal's URI.resolve doesn't work correctly for opaque URIs
-            if ref.scheme.nil? && ref.path.empty? && ref.fragment
-              result = base.dup
-              result.fragment = ref.fragment
-              result
-            else
-              base.resolve(ref)
-            end
-          end
         end
 
         # $dynamicAnchor keyword
         class DynamicAnchor < Keyword
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             uri = schema.base_uri.dup
-            uri.fragment = value.as_s
+            unless value_str = value.as_s?
+              raise InvalidSchema.new("$dynamicAnchor must be a string, got: #{value.raw.class}")
+            end
+            uri.fragment = value_str
             root.resources[:lexical][uri] = schema
             root.resources[:dynamic][uri] = schema
             value
@@ -133,7 +140,12 @@ module JsonSchemer
           @dynamic_anchor_checked : Bool = false
 
           def ref_uri : URI
-            @ref_uri ||= resolve_uri_reference(schema.base_uri, value.as_s)
+            @ref_uri ||= begin
+              unless value_str = value.as_s?
+                raise InvalidSchema.new("$dynamicRef must be a string, got: #{value.raw.class}")
+              end
+              resolve_uri_reference(schema.base_uri, value_str)
+            end
           end
 
           def ref_schema : Schema
@@ -170,26 +182,16 @@ module JsonSchemer
 
             resolved_schema.validate_instance(instance, instance_location, context)
           end
-
-          private def resolve_uri_reference(base : URI, ref_str : String) : URI
-            ref = URI.parse(ref_str)
-            # Handle fragment-only refs for opaque URIs (like urn:)
-            # Crystal's URI.resolve doesn't work correctly for opaque URIs
-            if ref.scheme.nil? && ref.path.empty? && ref.fragment
-              result = base.dup
-              result.fragment = ref.fragment
-              result
-            else
-              base.resolve(ref)
-            end
-          end
         end
 
         # $defs keyword
         class Defs < Keyword
           def parse : JSON::Any | Schema | Array(Schema) | Hash(String, Schema) | Hash(String, Schema | Array(String)) | Regex | Nil
             result = {} of String => Schema
-            value.as_h.each do |key, subschema_value|
+            unless defs_hash = value.as_h?
+              raise InvalidSchema.new("$defs must be an object, got: #{value.raw.class}")
+            end
+            defs_hash.each do |key, subschema_value|
               result[key] = subschema(subschema_value, key)
             end
             result
