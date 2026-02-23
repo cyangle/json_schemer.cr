@@ -111,7 +111,7 @@ dns_validator = JsonSchemer::Format::DnsHostnameValidator.new(ttl: 10.minutes)
 schema = JsonSchemer.schema(
   %q({"format": "hostname"}),
   format: true,
-  formats: {"hostname" => dns_validator}
+  formats: {"hostname" => dns_validator.to_proc}
 )
 
 schema.valid?(JSON::Any.new("google.com"))  # => true
