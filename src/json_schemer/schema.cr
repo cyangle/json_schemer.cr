@@ -29,7 +29,23 @@ module JsonSchemer
   class Schema
     include Output
 
-    # Context struct for validation state
+    # Context class for validation state.
+    #
+    # Context holds mutable state during validation including recursion depth,
+    # dynamic scope for $dynamicRef resolution, and adjacent results for
+    # unevaluated items/properties tracking.
+    #
+    # For high-throughput scenarios, reuse contexts by passing a pre-allocated
+    # context to `Schema#validate`. Call `reset` between validations to clear state.
+    #
+    # ```
+    # context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+    #
+    # # Reuse the context for multiple validations
+    # schema1.validate(data1, context: context)
+    # context.reset(JSON::Any.new(nil))
+    # schema2.validate(data2, context: context)
+    # ```
     class Context
       property instance : JSON::Any
       property dynamic_scope : Array(Schema)
@@ -51,6 +67,25 @@ module JsonSchemer
         @depth : Int32 = 0,
         @discriminator_skip : Set(String) = Set(String).new,
       )
+      end
+
+      # Resets the context to a clean state for reuse.
+      # This avoids allocation overhead by clearing existing collections
+      # instead of creating new ones.
+      #
+      # Returns self for method chaining.
+      def reset(
+        @instance : JSON::Any,
+        @short_circuit : Bool = false,
+        @access_mode : String? = nil,
+      ) : self
+        @dynamic_scope.clear
+        @adjacent_results = nil
+        @depth = 0
+        @discriminator_skip.clear
+        @short_circuit = short_circuit
+        @access_mode = access_mode
+        self
       end
     end
 
@@ -289,60 +324,68 @@ module JsonSchemer
     # * "basic": Includes a list of errors.
     # * "classic": Detailed hierarchical error reporting (default).
     #
+    # For high-throughput scenarios, you can reuse a Context object by passing it
+    # as the `context` parameter. This avoids allocation overhead for each validation.
+    #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
+    #
+    # # Standard usage (creates new context each time)
     # result = schema.validate("\"invalid\"")
     # puts result["valid"]  # => false
     # puts result["errors"] # => Array of errors
+    #
+    # # High-throughput usage (reuses context)
+    # context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+    # 1000.times do |i|
+    #   context.reset(JSON::Any.new(i))
+    #   schema.validate(JSON::Any.new(i), context: context)
+    # end
     # ```
     def validate(
       instance : JSON::Any | String,
       output_format : String? = nil,
       access_mode : String? = nil,
+      context : Context? = nil,
     ) : Hash(String, JSON::Any)
       resolved_output_format = output_format || configuration.output_format
       resolved_access_mode = access_mode || configuration.access_mode
-
-      # Convert instance to JSON::Any
       json_instance = if instance.is_a?(JSON::Any)
                         instance
                       else
                         JSON.parse(instance)
                       end
-
       instance_location = Location.root
-      context = Context.new(
-        json_instance,
-        [] of Schema,
-        nil,
-        resolved_output_format == "flag" && !configuration.insert_property_defaults,
-        resolved_access_mode
-      )
+      short_circuit = resolved_output_format == "flag" && !configuration.insert_property_defaults
 
-      result = validate_instance(json_instance, instance_location, context)
+      # Use provided context (reset it) or create a new one
+      ctx = if provided_context = context
+              provided_context.reset(json_instance, short_circuit, resolved_access_mode)
+            else
+              Context.new(
+                json_instance,
+                [] of Schema,
+                nil,
+                short_circuit,
+                resolved_access_mode
+              )
+            end
 
+      result = validate_instance(json_instance, instance_location, ctx)
       # Insert property defaults if configured
       insert_defaults = configuration.insert_property_defaults
       if insert_defaults
         defaults_inserted = if pdr = configuration.property_default_resolver
-                              result.insert_property_defaults(context) { |value, property, results| pdr.call(value, property, results) }
+                              result.insert_property_defaults(ctx) { |value, property, results| pdr.call(value, property, results) }
                             else
-                              result.insert_property_defaults(context)
+                              result.insert_property_defaults(ctx)
                             end
-
         if defaults_inserted
           # Re-validate after inserting defaults
-          context = Context.new(
-            json_instance,
-            [] of Schema,
-            nil,
-            resolved_output_format == "flag",
-            resolved_access_mode
-          )
-          result = validate_instance(json_instance, instance_location, context)
+          ctx.reset(json_instance, resolved_output_format == "flag", resolved_access_mode)
+          result = validate_instance(json_instance, instance_location, ctx)
         end
       end
-
       result.output(resolved_output_format)
     end
 
