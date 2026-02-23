@@ -42,4 +42,23 @@ describe "Depth Security" do
     end
     schema.valid?(JSON::Any.new(instance)).should be_true
   end
+
+  describe "max_depth validation" do
+    it "raises ArgumentError when max_depth is 0" do
+      expect_raises(ArgumentError, /max_depth must be > 0/) do
+        JsonSchemer.schema(%q({"type": "string"}), max_depth: 0)
+      end
+    end
+
+    it "raises ArgumentError when max_depth is negative" do
+      expect_raises(ArgumentError, /max_depth must be > 0, got: -1/) do
+        JsonSchemer.schema(%q({"type": "string"}), max_depth: -1)
+      end
+    end
+
+    it "accepts max_depth of 1" do
+      schema = JsonSchemer.schema(%q({"type": "string"}), max_depth: 1)
+      schema.valid?(JSON::Any.new("hello")).should be_true
+    end
+  end
 end

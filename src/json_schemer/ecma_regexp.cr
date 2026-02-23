@@ -113,7 +113,7 @@ module JsonSchemer
         else
           codepoint.chr.to_s
         end
-      rescue
+      rescue ex : ArgumentError | OverflowError
         match
       end
 
@@ -150,7 +150,7 @@ module JsonSchemer
     private def self.convert_dollar_anchor(pattern : String) : String
       result = String::Builder.new
       i = 0
-      in_char_class = false
+      char_class_depth = 0
       escape_next = false
 
       while i < pattern.size
@@ -170,13 +170,13 @@ module JsonSchemer
           next
         end
 
-        if char == '[' && !in_char_class
-          in_char_class = true
+        if char == '['
+          char_class_depth += 1
           result << char
-        elsif char == ']' && in_char_class
-          in_char_class = false
+        elsif char == ']' && char_class_depth > 0
+          char_class_depth -= 1
           result << char
-        elsif char == '$' && !in_char_class
+        elsif char == '$' && char_class_depth == 0
           # Replace $ with \z for ECMA-262 semantics
           result << "\\z"
         else
@@ -235,7 +235,7 @@ module JsonSchemer
     private def self.replace_escapes_outside_character_classes(pattern : String) : String
       result = String::Builder.new
       i = 0
-      in_char_class = false
+      char_class_depth = 0
       escape_next = false
 
       while i < pattern.size
@@ -243,7 +243,7 @@ module JsonSchemer
 
         if escape_next
           # Check if this is a character class escape we need to replace
-          if !in_char_class && "dDwWsS".includes?(char)
+          if char_class_depth == 0 && "dDwWsS".includes?(char)
             escape_seq = "\\#{char}"
             if replacement = ESCAPES[escape_seq]?
               result << replacement
@@ -265,10 +265,10 @@ module JsonSchemer
           next
         end
 
-        if char == '[' && !in_char_class
-          in_char_class = true
-        elsif char == ']' && in_char_class
-          in_char_class = false
+        if char == '['
+          char_class_depth += 1
+        elsif char == ']' && char_class_depth > 0
+          char_class_depth -= 1
         end
 
         result << char
@@ -311,17 +311,17 @@ module JsonSchemer
       return false if has_invalid_escapes?(pattern)
 
       # Then check if it's a valid regex overall
-      crystal_equivalent(pattern)
-      Regex.new(crystal_equivalent(pattern))
+      converted = crystal_equivalent(pattern)
+      Regex.new(converted)
       true
-    rescue
+    rescue ex : InvalidEcmaRegexp | ArgumentError
       false
     end
 
     # Check for escape sequences that are invalid in ECMA-262
     private def self.has_invalid_escapes?(pattern : String) : Bool
       i = 0
-      in_char_class = false
+      char_class_depth = 0
 
       while i < pattern.size
         char = pattern[i]
@@ -333,17 +333,17 @@ module JsonSchemer
           next_char = pattern[i]
 
           # Inside character class, most escapes are allowed as identity escapes
-          unless in_char_class
+          if char_class_depth == 0
             # Check if this is an invalid escape outside character class
             # \a is specifically NOT a valid ECMA-262 escape
             if next_char == 'a'
               return true
             end
           end
-        elsif char == '[' && !in_char_class
-          in_char_class = true
-        elsif char == ']' && in_char_class
-          in_char_class = false
+        elsif char == '['
+          char_class_depth += 1
+        elsif char == ']' && char_class_depth > 0
+          char_class_depth -= 1
         end
 
         i += 1

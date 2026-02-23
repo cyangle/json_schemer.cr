@@ -29,7 +29,23 @@ module JsonSchemer
   class Schema
     include Output
 
-    # Context struct for validation state
+    # Context class for validation state.
+    #
+    # Context holds mutable state during validation including recursion depth,
+    # dynamic scope for $dynamicRef resolution, and adjacent results for
+    # unevaluated items/properties tracking.
+    #
+    # For high-throughput scenarios, reuse contexts by passing a pre-allocated
+    # context to `Schema#validate`. Call `reset` between validations to clear state.
+    #
+    # ```
+    # context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+    #
+    # # Reuse the context for multiple validations
+    # schema1.validate(data1, context: context)
+    # context.reset(JSON::Any.new(nil))
+    # schema2.validate(data2, context: context)
+    # ```
     class Context
       property instance : JSON::Any
       property dynamic_scope : Array(Schema)
@@ -37,6 +53,10 @@ module JsonSchemer
       property short_circuit : Bool
       property access_mode : String?
       property depth : Int32
+      # Thread-safe discriminator recursion guard: tracks schema locations to skip
+      # during discriminator <-> allOf validation to prevent infinite loops.
+      # Stored on Context instead of keyword instances for fiber-safety.
+      property discriminator_skip : Set(String)
 
       def initialize(
         @instance : JSON::Any,
@@ -45,7 +65,45 @@ module JsonSchemer
         @short_circuit : Bool = false,
         @access_mode : String? = nil,
         @depth : Int32 = 0,
+        @discriminator_skip : Set(String) = Set(String).new,
       )
+      end
+
+      # Resets the context to a clean state for reuse.
+      # This avoids allocation overhead by clearing existing collections
+      # instead of creating new ones.
+      #
+      # Returns self for method chaining.
+      def reset(
+        @instance : JSON::Any,
+        @short_circuit : Bool = false,
+        @access_mode : String? = nil,
+      ) : self
+        @dynamic_scope.clear
+        @adjacent_results = nil
+        @depth = 0
+        @discriminator_skip.clear
+        self
+      end
+    end
+
+    # JsonPointerUri struct for pointer result from URI fragment parsing.
+    private struct JsonPointerUri
+      property pointer : String
+      property uri_without_fragment : URI
+
+      def initialize(@pointer : String, @uri_without_fragment : URI)
+      end
+
+      def self.new(uri : URI)
+        pointer = ""
+        frag = uri.fragment
+        if frag && Format.valid_json_pointer?(frag)
+          pointer = URI.decode(frag)
+          uri = uri.dup
+          uri.fragment = nil
+        end
+        JsonPointerUri.new(pointer, uri)
       end
     end
 
@@ -72,24 +130,30 @@ module JsonSchemer
     setter keywords : Hash(String, Keyword.class)?
     setter keyword_order : Hash(String, Int32)?
 
+    @lock = Mutex.new(protection: :reentrant)
+
     def keywords : Hash(String, Keyword.class)
-      @keywords ||= begin
-        meta = resolved_meta_schema
-        if meta.is_a?(Schema) && meta != self
-          meta.keywords
-        else
-          Draft202012::Vocab::ALL
+      @keywords || @lock.synchronize do
+        @keywords ||= begin
+          meta = resolved_meta_schema
+          if meta.is_a?(Schema) && meta != self
+            meta.keywords
+          else
+            Draft202012::Vocab::ALL
+          end
         end
       end
     end
 
     def keyword_order : Hash(String, Int32)
-      @keyword_order ||= begin
-        meta = resolved_meta_schema
-        if meta.is_a?(Schema) && meta != self
-          meta.keyword_order
-        else
-          {} of String => Int32 # Default order
+      @keyword_order || @lock.synchronize do
+        @keyword_order ||= begin
+          meta = resolved_meta_schema
+          if meta.is_a?(Schema) && meta != self
+            meta.keyword_order
+          else
+            {} of String => Int32 # Default order
+          end
         end
       end
     end
@@ -143,6 +207,7 @@ module JsonSchemer
       output_format : String? = nil,
       access_mode : String? = nil,
       max_depth : Int32? = nil,
+      regexp_filter : Proc(String, Bool)? = nil,
     )
       @location = if parent
                     kw = keyword || ""
@@ -158,11 +223,11 @@ module JsonSchemer
       # Convert value to JSON::Any
       @value = case value
                when JSON::Any
-                 value.clone
+                 value
                when Bool
                  JSON::Any.new(value)
                else
-                 JSON::Any.new(value.transform_values(&.clone))
+                 JSON::Any.new(value.transform_values { |v| v })
                end
 
       @parent = parent
@@ -193,7 +258,8 @@ module JsonSchemer
         regexp_resolver: regexp_resolver || base_config.regexp_resolver,
         output_format: output_format || base_config.output_format,
         access_mode: access_mode || base_config.access_mode,
-        max_depth: max_depth || base_config.max_depth
+        max_depth: max_depth || base_config.max_depth,
+        regexp_filter: regexp_filter || base_config.regexp_filter
       )
       @configuration = config
 
@@ -231,20 +297,32 @@ module JsonSchemer
     #
     # The instance must be a `JSON::Any` or a JSON `String`.
     #
+    # For high-throughput scenarios, you can reuse a Context object by passing it
+    # as the `context` parameter. This avoids allocation overhead for each validation.
+    #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
     # schema.valid?(JSON::Any.new(10_i64)) # => true
     # schema.valid?("10")                  # => true (parsed as 10)
     # schema.valid?("\"10\"")              # => false (parsed as "10")
+    #
+    # # High-throughput usage with context reuse
+    # context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+    # 1000.times do |i|
+    #   context.reset(JSON::Any.new(i))
+    #   schema.valid?(JSON::Any.new(i), context: context)
+    # end
     # ```
     def valid?(
       instance : JSON::Any | String,
       access_mode : String? = nil,
+      context : Context? = nil,
     ) : Bool
       validate(
         instance,
         output_format: "flag",
-        access_mode: access_mode || configuration.access_mode
+        access_mode: access_mode || configuration.access_mode,
+        context: context,
       )["valid"].as_bool
     end
 
@@ -256,60 +334,68 @@ module JsonSchemer
     # * "basic": Includes a list of errors.
     # * "classic": Detailed hierarchical error reporting (default).
     #
+    # For high-throughput scenarios, you can reuse a Context object by passing it
+    # as the `context` parameter. This avoids allocation overhead for each validation.
+    #
     # ```
     # schema = JsonSchemer.schema(%q({"type": "integer"}))
+    #
+    # # Standard usage (creates new context each time)
     # result = schema.validate("\"invalid\"")
     # puts result["valid"]  # => false
     # puts result["errors"] # => Array of errors
+    #
+    # # High-throughput usage (reuses context)
+    # context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+    # 1000.times do |i|
+    #   context.reset(JSON::Any.new(i))
+    #   schema.validate(JSON::Any.new(i), context: context)
+    # end
     # ```
     def validate(
       instance : JSON::Any | String,
       output_format : String? = nil,
       access_mode : String? = nil,
+      context : Context? = nil,
     ) : Hash(String, JSON::Any)
       resolved_output_format = output_format || configuration.output_format
       resolved_access_mode = access_mode || configuration.access_mode
-
-      # Convert instance to JSON::Any
       json_instance = if instance.is_a?(JSON::Any)
                         instance
                       else
                         JSON.parse(instance)
                       end
-
       instance_location = Location.root
-      context = Context.new(
-        json_instance,
-        [] of Schema,
-        nil,
-        resolved_output_format == "flag" && !configuration.insert_property_defaults,
-        resolved_access_mode
-      )
+      short_circuit = resolved_output_format == "flag" && !configuration.insert_property_defaults
 
-      result = validate_instance(json_instance, instance_location, context)
+      # Use provided context (reset it) or create a new one
+      ctx = if provided_context = context
+              provided_context.reset(json_instance, short_circuit, resolved_access_mode)
+            else
+              Context.new(
+                json_instance,
+                [] of Schema,
+                nil,
+                short_circuit,
+                resolved_access_mode
+              )
+            end
 
+      result = validate_instance(json_instance, instance_location, ctx)
       # Insert property defaults if configured
       insert_defaults = configuration.insert_property_defaults
       if insert_defaults
         defaults_inserted = if pdr = configuration.property_default_resolver
-                              result.insert_property_defaults(context) { |value, property, results| pdr.call(value, property, results) }
+                              result.insert_property_defaults(ctx) { |value, property, results| pdr.call(value, property, results) }
                             else
-                              result.insert_property_defaults(context)
+                              result.insert_property_defaults(ctx)
                             end
-
         if defaults_inserted
           # Re-validate after inserting defaults
-          context = Context.new(
-            json_instance,
-            [] of Schema,
-            nil,
-            resolved_output_format == "flag",
-            resolved_access_mode
-          )
-          result = validate_instance(json_instance, instance_location, context)
+          ctx.reset(json_instance, resolved_output_format == "flag", resolved_access_mode)
+          result = validate_instance(json_instance, instance_location, ctx)
         end
       end
-
       result.output(resolved_output_format)
     end
 
@@ -336,6 +422,7 @@ module JsonSchemer
         if value.raw == false
           return result(instance, instance_location, location, false)
         end
+        # Per JSON Schema spec: empty object {} is equivalent to the `true` schema (matches everything)
         if value.raw == true || (value.raw.is_a?(Hash) && value.as_h.empty?)
           return result(instance, instance_location, location, true)
         end
@@ -363,37 +450,41 @@ module JsonSchemer
 
     # Get schema pointer
     def schema_pointer : String
-      @schema_pointer ||= if p = @parent
-                            if kw = @keyword
-                              "#{p.schema_pointer}/#{Location.escape_json_pointer_token(kw)}"
+      @schema_pointer || @lock.synchronize do
+        @schema_pointer ||= if p = @parent
+                              if kw = @keyword
+                                "#{p.schema_pointer}/#{Location.escape_json_pointer_token(kw)}"
+                              else
+                                p.schema_pointer
+                              end
                             else
-                              p.schema_pointer
+                              ""
                             end
-                          else
-                            ""
-                          end
+      end
     end
 
     # Absolute keyword location
     def absolute_keyword_location : String
-      @absolute_keyword_location ||= begin
-        buri = base_uri
-        frag = buri.fragment
-        if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
-          uri = buri.dup
-          uri.fragment = ""
-          uri.to_s
-        elsif kw = @keyword
-          if p = @parent
-            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+      @absolute_keyword_location || @lock.synchronize do
+        @absolute_keyword_location ||= begin
+          buri = base_uri
+          frag = buri.fragment
+          if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
+            uri = buri.dup
+            uri.fragment = ""
+            uri.to_s
+          elsif kw = @keyword
+            if p = @parent
+              "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+            else
+              ""
+            end
           else
-            ""
-          end
-        else
-          if p = @parent
-            p.absolute_keyword_location
-          else
-            ""
+            if p = @parent
+              p.absolute_keyword_location
+            else
+              ""
+            end
           end
         end
       end
@@ -424,7 +515,9 @@ module JsonSchemer
 
     # Get resources
     def resources : NamedTuple(lexical: Resources, dynamic: Resources)
-      @resources ||= {lexical: Resources.new, dynamic: Resources.new}
+      @resources || @lock.synchronize do
+        @resources ||= {lexical: Resources.new, dynamic: Resources.new}
+      end
     end
 
     # Resolves a reference from the current schema's context.
@@ -442,92 +535,35 @@ module JsonSchemer
 
     # Resolve a reference URI
     def resolve_ref(uri : URI) : Schema
-      pointer = ""
-      frag = uri.fragment
-      if frag && Format.valid_json_pointer?(frag)
-        pointer = URI.decode(frag)
-        uri = uri.dup
-        uri.fragment = nil
-      end
-
+      json_pointer_uri = JsonPointerUri.new(uri)
       lexical = resources[:lexical]
-      schema_result = lexical[uri]
-
-      if schema_result.nil? && uri.fragment.nil?
-        empty_uri = uri.dup
+      schema_result = lexical[json_pointer_uri.uri_without_fragment]
+      if schema_result.nil?
+        empty_uri = json_pointer_uri.uri_without_fragment.dup
         empty_uri.fragment = ""
         schema_result = lexical[empty_uri]
       end
-
       unless schema_result
-        location_id = uri.fragment
-        uri_copy = uri.dup
-        uri_copy.fragment = nil
-
-        resolved = ref_resolver.call(uri_copy)
-
-        # Fallback to built-in meta-schemas if ref_resolver returns nil
-        if resolved.nil?
-          meta_callable = JsonSchemer::META_SCHEMA_CALLABLES_BY_BASE_URI_STR[uri_copy.to_s]?
-          if meta_callable
-            schema_result = meta_callable.call
-          else
-            raise InvalidRefResolution.new(uri.to_s)
-          end
-        else
-          remote = JsonSchemer.schema(
-            resolved,
-            base_uri: uri_copy,
-            meta_schema: resolved_meta_schema,
-            ref_resolver: ref_resolver,
-            regexp_resolver: regexp_resolver,
-            formats: configuration.formats,
-            content_encodings: configuration.content_encodings,
-            content_media_types: configuration.content_media_types
-          )
-
-          remote_uri = remote.base_uri.dup
-          remote_uri.fragment = location_id if location_id
-          schema_result = remote.resources[:lexical].fetch(remote_uri)
-        end
+        schema_result = fetch_remote_schema(json_pointer_uri.uri_without_fragment)
       end
-
       # Navigate pointer
-      if !pointer.empty?
-        begin
-          tokens = Hana::Pointer.parse(pointer)
-          current = schema_result
-          tokens.each do |token|
-            case current
-            when Schema
-              kw = current.parsed[token]?
-              raise InvalidRefPointer.new(pointer) unless kw
-              current = kw
-            when Keyword
-              current = current.fetch(token)
-            else
-              raise InvalidRefPointer.new(pointer)
-            end
-          end
-          schema_result = current
-        rescue e : KeyError | IndexError | ArgumentError
-          raise InvalidRefPointer.new(pointer)
-        end
+      if !json_pointer_uri.pointer.empty?
+        schema_result = navigate_json_pointer(schema_result, json_pointer_uri.pointer)
       end
-
-      # Unwrap to schema if needed
-      if schema_result.is_a?(Keyword)
-        ps = schema_result.parsed_schema
-        raise InvalidRefPointer.new(pointer) unless ps
-        schema_result = ps
-      end
-
-      raise InvalidRefPointer.new(pointer) unless schema_result.is_a?(Schema)
-      schema_result
+      unwrap_to_schema(schema_result, json_pointer_uri.pointer)
     end
 
     # Resolve regexp pattern
     def resolve_regexp(pattern : String) : Regex
+      config = configuration
+
+      # Apply custom filter
+      if filter = config.regexp_filter
+        unless filter.call(pattern)
+          raise RegexFilterViolation.new(pattern)
+        end
+      end
+
       regexp_resolver.call(pattern) || raise InvalidRegexpResolution.new(pattern)
     end
 
@@ -633,36 +669,40 @@ module JsonSchemer
 
     # Get ref resolver proc
     def ref_resolver : Proc(URI, JSONHash?)
-      @ref_resolver ||= case configuration.ref_resolver
-                        when String
-                          if configuration.ref_resolver == "net/http"
-                            resolver = CachedRefResolver.new(&NET_HTTP_REF_RESOLVER)
-                            resolver.to_proc
+      @ref_resolver || @lock.synchronize do
+        @ref_resolver ||= case configuration.ref_resolver
+                          when String
+                            if configuration.ref_resolver == "net/http"
+                              resolver = CachedRefResolver.new(&NET_HTTP_REF_RESOLVER)
+                              resolver.to_proc
+                            else
+                              DEFAULT_REF_RESOLVER
+                            end
+                          when Proc(URI, JSONHash?)
+                            configuration.ref_resolver.as(Proc(URI, JSONHash?))
                           else
                             DEFAULT_REF_RESOLVER
                           end
-                        when Proc(URI, JSONHash?)
-                          configuration.ref_resolver.as(Proc(URI, JSONHash?))
-                        else
-                          DEFAULT_REF_RESOLVER
-                        end
+      end
     end
 
     # Get regexp resolver proc
     def regexp_resolver : Proc(String, Regex?)
-      @regexp_resolver ||= case configuration.regexp_resolver
-                           when "ecma"
-                             resolver = CachedRegexpResolver.new(&ECMA_REGEXP_RESOLVER)
-                             resolver.to_proc
-                           when "ruby"
-                             resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
-                             resolver.to_proc
-                           when Proc(String, Regex?)
-                             configuration.regexp_resolver.as(Proc(String, Regex?))
-                           else
-                             resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
-                             resolver.to_proc
-                           end
+      @regexp_resolver || @lock.synchronize do
+        @regexp_resolver ||= case configuration.regexp_resolver
+                             when "ecma"
+                               resolver = CachedRegexpResolver.new(&ECMA_REGEXP_RESOLVER)
+                               resolver.to_proc
+                             when "ruby"
+                               resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
+                               resolver.to_proc
+                             when Proc(String, Regex?)
+                               configuration.regexp_resolver.as(Proc(String, Regex?))
+                             else
+                               resolver = CachedRegexpResolver.new(&RUBY_REGEXP_RESOLVER)
+                               resolver.to_proc
+                             end
+      end
     end
 
     # Fetch format validator
@@ -792,6 +832,74 @@ module JsonSchemer
 
       # Warmup caches
       parsed.each_value(&.after_schema_initialize)
+    end
+
+    # Fetch a remote schema from a URI.
+    # Falls back to built-in meta-schemas if ref_resolver returns nil.
+    private def fetch_remote_schema(uri : URI) : Schema | Keyword | Nil
+      location_id = uri.fragment
+      uri_copy = uri.dup
+      uri_copy.fragment = nil
+
+      resolved = ref_resolver.call(uri_copy)
+
+      # Fallback to built-in meta-schemas if ref_resolver returns nil
+      if resolved.nil?
+        meta_callable = JsonSchemer::META_SCHEMA_CALLABLES_BY_BASE_URI_STR[uri_copy.to_s]?
+        if meta_callable
+          return meta_callable.call
+        else
+          raise InvalidRefResolution.new(uri.to_s)
+        end
+      end
+
+      remote = JsonSchemer.schema(
+        resolved,
+        base_uri: uri_copy,
+        meta_schema: resolved_meta_schema,
+        ref_resolver: ref_resolver,
+        regexp_resolver: regexp_resolver,
+        formats: configuration.formats,
+        content_encodings: configuration.content_encodings,
+        content_media_types: configuration.content_media_types
+      )
+
+      remote_uri = remote.base_uri.dup
+      remote_uri.fragment = location_id if location_id
+      remote.resources[:lexical].fetch(remote_uri)
+    end
+
+    # Navigate through Schema/Keyword using JSON pointer tokens.
+    private def navigate_json_pointer(start : Schema | Keyword, pointer : String) : Schema | Keyword
+      tokens = Hana::Pointer.parse(pointer)
+      current : Schema | Keyword = start
+      tokens.each do |token|
+        case current
+        when Schema
+          kw = current.parsed[token]?
+          raise InvalidRefPointer.new(pointer) unless kw
+          current = kw
+        when Keyword
+          current = current.fetch(token)
+        else
+          raise InvalidRefPointer.new(pointer)
+        end
+      end
+      current
+    rescue e : KeyError | IndexError | ArgumentError
+      raise InvalidRefPointer.new(pointer)
+    end
+
+    # Unwrap a result to Schema if it's a Keyword.
+    private def unwrap_to_schema(result : Schema | Keyword, pointer : String) : Schema
+      if result.is_a?(Keyword)
+        ps = result.parsed_schema
+        raise InvalidRefPointer.new(pointer) unless ps
+        result = ps
+      end
+
+      raise InvalidRefPointer.new(pointer) unless result.is_a?(Schema)
+      result
     end
   end
 end

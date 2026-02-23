@@ -1,6 +1,12 @@
 module JsonSchemer
   # Result of validation
   class Result
+    @lock = Mutex.new(protection: :reentrant)
+    @error : String?
+    @resolved_instance_location : String?
+    @formatted_instance_location : String?
+    @resolved_keyword_location : String?
+
     protected getter source : Schema | Keyword
     getter instance : JSON::Any
     getter instance_location : Location::Node
@@ -55,13 +61,17 @@ module JsonSchemer
     end
 
     # Get error message
-    getter error : String do
-      custom_msg = source.x_error
+    def error : String
+      @error || @lock.synchronize do
+        @error ||= begin
+          custom_msg = source.x_error
 
-      if custom_msg
-        interpolate(custom_msg)
-      else
-        source.error(formatted_instance_location: formatted_instance_location, details: details)
+          if custom_msg
+            interpolate(custom_msg)
+          else
+            source.error(formatted_instance_location: formatted_instance_location, details: details)
+          end
+        end
       end
     end
 
@@ -84,7 +94,7 @@ module JsonSchemer
 
       begin
         message % context
-      rescue
+      rescue ex : KeyError | ArgumentError
         message
       end
     end
@@ -239,16 +249,22 @@ module JsonSchemer
       end
     end
 
-    private getter resolved_instance_location : String do
-      Location.resolve(instance_location)
+    private def resolved_instance_location : String
+      @resolved_instance_location || @lock.synchronize do
+        @resolved_instance_location ||= Location.resolve(instance_location)
+      end
     end
 
-    private getter formatted_instance_location : String do
-      resolved_instance_location.empty? ? "root" : "`#{resolved_instance_location}`"
+    private def formatted_instance_location : String
+      @formatted_instance_location || @lock.synchronize do
+        @formatted_instance_location ||= resolved_instance_location.empty? ? "root" : "`#{resolved_instance_location}`"
+      end
     end
 
-    private getter resolved_keyword_location : String do
-      Location.resolve(keyword_location)
+    private def resolved_keyword_location : String
+      @resolved_keyword_location || @lock.synchronize do
+        @resolved_keyword_location ||= Location.resolve(keyword_location)
+      end
     end
 
     private def classic_error_type : String
@@ -272,10 +288,12 @@ module JsonSchemer
         # We use strict equality for JSON values
         first_value = entries.first[0]
         conflict = entries.any? { |e| e[0] != first_value }
-
-        unless conflict
+        if conflict
+          # Log warning about conflicting defaults
+          conflicting_values = entries.map(&.[0].raw.inspect).uniq!
+          Log.warn { "Property default conflict at #{instance_ptr.empty? ? "root" : instance_ptr}/#{property}: multiple default values (#{conflicting_values.join(", ")}) detected, no default inserted" }
+        else
           results = entries.map { |e| {e[1], e[2]} }
-
           if yield(first_value, property, results)
             if apply_default(context, instance_ptr, property, first_value)
               inserted = true
@@ -314,7 +332,7 @@ module JsonSchemer
 
               default_kw = prop_schema.parsed["default"]?
               if default_kw.is_a?(Keyword)
-                default_value = default_kw.value
+                default_value = default_kw.as(Draft202012::Vocab::MetaData::Default).cloned_value
                 candidates[{instance_ptr, property}] << {default_value, child_result, child_valid}
               end
             end

@@ -12,7 +12,7 @@ module JsonSchemer
       begin
         decoded = Base64.decode_string(instance)
         {true, decoded}
-      rescue
+      rescue ex : Base64::Error
         {false, nil}
       end
     }
@@ -22,7 +22,7 @@ module JsonSchemer
       begin
         parsed = JSON.parse(instance)
         {true, parsed}
-      rescue
+      rescue ex : JSON::ParseException
         {false, nil}
       end
     }
