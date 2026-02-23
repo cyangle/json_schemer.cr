@@ -951,11 +951,147 @@ The resolver receives:
 It should return `true` to allow the default value to be inserted, or `false` to skip it.
 
 ## ECMA-262 Regex Compatibility
-
 ```crystal
 # Use ECMA-262 regex patterns (JavaScript-compatible)
 schema = JsonSchemer.schema(
   %q({"pattern": "^\\\\p{L}+$"}),
   regexp_resolver: "ecma"
 )
+```
+
+## High-Throughput Validation
+
+For high-throughput scenarios where you need to validate many instances against the same schema, you can reuse a `Context` object to avoid the allocation overhead of creating new context objects for each validation.
+
+### Basic Usage
+
+```crystal
+schema = JsonSchemer.schema(%q({"type": "integer", "minimum": 0}))
+
+# Create a reusable context with a placeholder instance
+context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+
+# Reuse the context for multiple validations
+data = [1, 5, 10, 15, 20]
+data.each do |value|
+  context.reset(JSON::Any.new(value))
+  if schema.valid?(JSON::Any.new(value), context: context)
+    puts "#{value} is valid"
+  end
+end
+```
+
+### With Full Validation Results
+
+You can also use context reuse with the `validate` method to get detailed error information:
+
+```crystal
+schema = JsonSchemer.schema(%q({
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "name": {"type": "string"},
+    "age": {"type": "integer", "minimum": 0}
+  }
+}))
+
+context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+
+test_cases = [
+  {"name" => "John", "age" => 30},
+  {"name" => "Jane"},
+  {"age" => -5},  # Invalid: missing name, negative age
+]
+
+test_cases.each do |data|
+  json_data = JSON.parse(data.to_json)
+  context.reset(json_data)
+  result = schema.validate(json_data, context: context)
+  
+  if result["valid"].as_bool
+    puts "Valid: #{data}"
+  else
+    puts "Invalid: #{data}"
+    result["errors"].as_a.each do |error|
+      puts "  - #{error["error"]}"
+    end
+  end
+end
+```
+
+### Performance Considerations
+
+Context reuse provides the most benefit when:
+
+- Validating many small instances against the same schema
+- The schema is complex (many keywords, nested structures)
+- Memory allocation overhead is a concern
+
+For one-off validations or small batches, the performance difference is negligible.
+
+> [!WARNING]
+> **Sequential Usage Only:** The `Context` object is **NOT thread-safe**. Each context should only be used by a single fiber/thread at a time.
+>
+> - ✅ **Correct:** Reuse a context in a single loop or sequential processing
+> - ❌ **Incorrect:** Share a context across concurrent fibers or threads
+
+### Concurrent Validation Patterns
+
+For concurrent validation scenarios, use one of these patterns:
+
+#### Thread-Local Context Pool
+
+```crystal
+# Create a thread-local context
+class ValidationContext
+  @@context = {} of UInt64 => JsonSchemer::Schema::Context
+  
+  def self.get : JsonSchemer::Schema::Context
+    fiber_id = Fiber.current.object_id
+    @@context[fiber_id] ||= JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+  end
+end
+
+# Usage in concurrent code
+schema = JsonSchemer.schema(%q({"type": "integer"}))
+
+# Each fiber gets its own context
+10.times do |i|
+  spawn do
+    context = ValidationContext.get
+    context.reset(JSON::Any.new(i))
+    schema.valid?(JSON::Any.new(i), context: context)
+  end
+end
+```
+
+#### Context Pool
+
+```crystal
+class ContextPool
+  def initialize(@capacity : Int32)
+    @pool = Channel(JsonSchemer::Schema::Context).new(@capacity)
+    @capacity.times { @pool.send(JsonSchemer::Schema::Context.new(JSON::Any.new(nil))) }
+  end
+  
+  def checkout : JsonSchemer::Schema::Context
+    @pool.receive
+  end
+  
+  def checkin(context : JsonSchemer::Schema::Context)
+    @pool.send(context)
+  end
+end
+
+# Usage
+pool = ContextPool.new(4)
+schema = JsonSchemer.schema(%q({"type": "integer"}))
+
+context = pool.checkout
+begin
+  context.reset(JSON::Any.new(42))
+  schema.valid?(JSON::Any.new(42), context: context)
+ensure
+  pool.checkin(context)
+end
 ```
