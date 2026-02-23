@@ -54,6 +54,26 @@ module JsonSchemer
       end
     end
 
+    # JsonPointerUri struct for pointer result from URI fragment parsing.
+    private struct JsonPointerUri
+      property pointer : String
+      property uri_without_fragment : URI
+
+      def initialize(@pointer : String, @uri_without_fragment : URI)
+      end
+
+      def self.new(uri : URI)
+        pointer = ""
+        frag = uri.fragment
+        if frag && Format.valid_json_pointer?(frag)
+          pointer = URI.decode(frag)
+          uri = uri.dup
+          uri.fragment = nil
+        end
+        JsonPointerUri.new(pointer, uri)
+      end
+    end
+
     # Class constants for keyword classes
     SCHEMA_KEYWORD_CLASS     = Draft202012::Vocab::Core::SchemaKeyword
     VOCABULARY_KEYWORD_CLASS = Draft202012::Vocab::Core::Vocabulary
@@ -462,88 +482,22 @@ module JsonSchemer
 
     # Resolve a reference URI
     def resolve_ref(uri : URI) : Schema
-      pointer = ""
-      frag = uri.fragment
-      if frag && Format.valid_json_pointer?(frag)
-        pointer = URI.decode(frag)
-        uri = uri.dup
-        uri.fragment = nil
-      end
-
+      json_pointer_uri = JsonPointerUri.new(uri)
       lexical = resources[:lexical]
-      schema_result = lexical[uri]
-
-      if schema_result.nil? && uri.fragment.nil?
-        empty_uri = uri.dup
+      schema_result = lexical[json_pointer_uri.uri_without_fragment]
+      if schema_result.nil?
+        empty_uri = json_pointer_uri.uri_without_fragment.dup
         empty_uri.fragment = ""
         schema_result = lexical[empty_uri]
       end
-
       unless schema_result
-        location_id = uri.fragment
-        uri_copy = uri.dup
-        uri_copy.fragment = nil
-
-        resolved = ref_resolver.call(uri_copy)
-
-        # Fallback to built-in meta-schemas if ref_resolver returns nil
-        if resolved.nil?
-          meta_callable = JsonSchemer::META_SCHEMA_CALLABLES_BY_BASE_URI_STR[uri_copy.to_s]?
-          if meta_callable
-            schema_result = meta_callable.call
-          else
-            raise InvalidRefResolution.new(uri.to_s)
-          end
-        else
-          remote = JsonSchemer.schema(
-            resolved,
-            base_uri: uri_copy,
-            meta_schema: resolved_meta_schema,
-            ref_resolver: ref_resolver,
-            regexp_resolver: regexp_resolver,
-            formats: configuration.formats,
-            content_encodings: configuration.content_encodings,
-            content_media_types: configuration.content_media_types
-          )
-
-          remote_uri = remote.base_uri.dup
-          remote_uri.fragment = location_id if location_id
-          schema_result = remote.resources[:lexical].fetch(remote_uri)
-        end
+        schema_result = fetch_remote_schema(json_pointer_uri.uri_without_fragment)
       end
-
       # Navigate pointer
-      if !pointer.empty?
-        begin
-          tokens = Hana::Pointer.parse(pointer)
-          current = schema_result
-          tokens.each do |token|
-            case current
-            when Schema
-              kw = current.parsed[token]?
-              raise InvalidRefPointer.new(pointer) unless kw
-              current = kw
-            when Keyword
-              current = current.fetch(token)
-            else
-              raise InvalidRefPointer.new(pointer)
-            end
-          end
-          schema_result = current
-        rescue e : KeyError | IndexError | ArgumentError
-          raise InvalidRefPointer.new(pointer)
-        end
+      if !json_pointer_uri.pointer.empty?
+        schema_result = navigate_json_pointer(schema_result, json_pointer_uri.pointer)
       end
-
-      # Unwrap to schema if needed
-      if schema_result.is_a?(Keyword)
-        ps = schema_result.parsed_schema
-        raise InvalidRefPointer.new(pointer) unless ps
-        schema_result = ps
-      end
-
-      raise InvalidRefPointer.new(pointer) unless schema_result.is_a?(Schema)
-      schema_result
+      unwrap_to_schema(schema_result, json_pointer_uri.pointer)
     end
 
     # Resolve regexp pattern
@@ -825,6 +779,74 @@ module JsonSchemer
 
       # Warmup caches
       parsed.each_value(&.after_schema_initialize)
+    end
+
+    # Fetch a remote schema from a URI.
+    # Falls back to built-in meta-schemas if ref_resolver returns nil.
+    private def fetch_remote_schema(uri : URI) : Schema | Keyword | Nil
+      location_id = uri.fragment
+      uri_copy = uri.dup
+      uri_copy.fragment = nil
+
+      resolved = ref_resolver.call(uri_copy)
+
+      # Fallback to built-in meta-schemas if ref_resolver returns nil
+      if resolved.nil?
+        meta_callable = JsonSchemer::META_SCHEMA_CALLABLES_BY_BASE_URI_STR[uri_copy.to_s]?
+        if meta_callable
+          return meta_callable.call
+        else
+          raise InvalidRefResolution.new(uri.to_s)
+        end
+      end
+
+      remote = JsonSchemer.schema(
+        resolved,
+        base_uri: uri_copy,
+        meta_schema: resolved_meta_schema,
+        ref_resolver: ref_resolver,
+        regexp_resolver: regexp_resolver,
+        formats: configuration.formats,
+        content_encodings: configuration.content_encodings,
+        content_media_types: configuration.content_media_types
+      )
+
+      remote_uri = remote.base_uri.dup
+      remote_uri.fragment = location_id if location_id
+      remote.resources[:lexical].fetch(remote_uri)
+    end
+
+    # Navigate through Schema/Keyword using JSON pointer tokens.
+    private def navigate_json_pointer(start : Schema | Keyword, pointer : String) : Schema | Keyword
+      tokens = Hana::Pointer.parse(pointer)
+      current : Schema | Keyword = start
+      tokens.each do |token|
+        case current
+        when Schema
+          kw = current.parsed[token]?
+          raise InvalidRefPointer.new(pointer) unless kw
+          current = kw
+        when Keyword
+          current = current.fetch(token)
+        else
+          raise InvalidRefPointer.new(pointer)
+        end
+      end
+      current
+    rescue e : KeyError | IndexError | ArgumentError
+      raise InvalidRefPointer.new(pointer)
+    end
+
+    # Unwrap a result to Schema if it's a Keyword.
+    private def unwrap_to_schema(result : Schema | Keyword, pointer : String) : Schema
+      if result.is_a?(Keyword)
+        ps = result.parsed_schema
+        raise InvalidRefPointer.new(pointer) unless ps
+        result = ps
+      end
+
+      raise InvalidRefPointer.new(pointer) unless result.is_a?(Schema)
+      result
     end
   end
 end
