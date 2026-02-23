@@ -216,7 +216,42 @@ schema = JsonSchemer.schema(
 ```
 
 See [USAGE.md](USAGE.md#class-based-custom-keywords) for a complete example including parsing configuration options.
+### 5. High-Throughput Validation (Context Reuse)
 
+For high-throughput scenarios validating many instances against the same schema, you can reuse a `Context` object to avoid allocation overhead.
+
+```crystal
+schema = JsonSchemer.schema(%q({"type": "integer"}))
+
+# Create a reusable context
+context = JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
+
+# Reuse the context for multiple validations
+1000.times do |i|
+  context.reset(JSON::Any.new(i))
+  schema.valid?(JSON::Any.new(i), context: context)
+end
+```
+
+Both `valid?` and `validate` accept an optional `context` parameter:
+
+```crystal
+# With valid? (returns boolean)
+schema.valid?(data, context: context)
+
+# With validate (returns full result)
+schema.validate(data, context: context)
+```
+
+> [!WARNING]
+> **Sequential Usage Only:** The `Context` object is **NOT thread-safe**. Each context should only be used by a single fiber/thread at a time.
+> 
+> - ✅ **Correct:** Reuse a context in a single loop or sequential processing
+> - ❌ **Incorrect:** Share a context across concurrent fibers or threads
+> 
+> For concurrent validation, create a separate `Context` per fiber/thread, or use a thread-local context pool.
+
+See [USAGE.md](USAGE.md#high-throughput-validation) for more details.
 ## Configuration Reference
 
 This section provides a complete reference for all configuration options available when creating schemas.
