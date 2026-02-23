@@ -529,6 +529,9 @@ module JsonSchemer
 
         # Required keyword
         class Required < Keyword
+          # Maximum depth for BFS traversal to prevent excessive work on large schemas.
+          # This is separate from the validation max_depth as it's a different traversal context.
+          MAX_BFS_DEPTH = 50
           @required_keys : Array(String) = [] of String
           @effective_keys_read : (Array(String) | Nil) = nil
           @effective_keys_write : (Array(String) | Nil) = nil
@@ -577,18 +580,26 @@ module JsonSchemer
             end
           end
 
+          # BFS traversal to find readOnly/writeOnly properties across the schema graph.
+          # Traversal is bounded by MAX_BFS_DEPTH to prevent excessive work on large schemas.
           private def calculate_effective_keys(mode : String) : Array(String)
             inapplicable = [] of String
-
-            queue = Deque(Schema).new
-            queue << schema
+            # Each entry: {schema, depth}
+            queue = Deque(Tuple(Schema, Int32)).new
+            queue << {schema, 0}
             visited = Set(Schema).new
-
             while !queue.empty?
-              s = queue.shift
+              current = queue.shift
+              s = current[0]
+              depth = current[1]
+
+              # Skip if already visited
               next if visited.includes?(s)
               visited << s
-
+              # Stop traversing deeper if max depth exceeded
+              if depth >= MAX_BFS_DEPTH
+                next
+              end
               # Use _keywords_lock if necessary, but here we just read parsed
               properties_kw = s.parsed.try(&.["properties"]?)
               if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
@@ -605,20 +616,22 @@ module JsonSchemer
                 end
               end
 
+              # Follow $ref
               if ref_kw = s.parsed.try(&.["$ref"]?)
                 if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
                   begin
-                    queue << ref_kw.ref_schema
+                    queue << {ref_kw.ref_schema, depth + 1}
                   rescue InvalidRefResolution | InvalidRefPointer | UnknownRef
                     # Skip unresolvable refs during access mode calculation
                   end
                 end
               end
 
+              # Follow allOf, anyOf, oneOf
               {"allOf", "anyOf", "oneOf"}.each do |applicator_key|
                 if app_kw = s.parsed.try(&.[applicator_key]?)
                   if app_kw.is_a?(Keyword) && app_kw.parsed.is_a?(Array(Schema))
-                    app_kw.parsed.as(Array(Schema)).each { |sub| queue << sub }
+                    app_kw.parsed.as(Array(Schema)).each { |sub| queue << {sub, depth + 1} }
                   end
                 end
               end
