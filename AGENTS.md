@@ -53,6 +53,7 @@ src/
   json_schemer.cr              # Main entry point, module-level API
   json_schemer/
     version.cr                 # Version constant
+    constants.cr               # Shared constants (regex patterns)
     schema.cr                  # Core Schema class for validation
     keyword.cr                 # Abstract base class for all keywords
     result.cr                  # Validation result structure
@@ -69,6 +70,7 @@ src/
     cached_resolver.cr         # Cached ref/regexp resolvers
     lru_cache.cr               # LRU cache implementation
     dns_resolver.cr            # DNS resolution utilities
+    regexp_helper.cr           # Regex matching helper with ReDoS protection
     draft202012/
       vocab/                   # Vocabulary implementations
         core.cr                # $schema, $id, $ref, $anchor, $dynamicRef, $defs
@@ -93,6 +95,8 @@ spec/
   format_spec.cr               # Format validation tests
   format/
     dns_hostname_spec.cr       # DNS hostname validation tests
+  json_schemer/                # Internal module tests
+  schemas/                     # Test schema files
   ref_spec.cr                  # $ref resolution tests
   property_defaults_spec.cr    # Property defaults tests
   options_spec.cr              # Configuration options tests
@@ -183,6 +187,8 @@ Available error classes:
 - `InvalidEcmaRegexp`
 - `InvalidSchema`
 - `MaximumDepthExceeded` - Raised when the validation recursion depth exceeds the configured maximum.
+- `RegexMatchLimitExceeded` - Raised when a regex match exceeds the backtracking limit (ReDoS protection).
+- `RegexFilterViolation` - Raised when a regex pattern is disallowed by configuration.
 - `JsonSchemer::Errors.pretty(error_hash)` - Helper for formatting error messages.
 
 ### Keyword Implementation Pattern
