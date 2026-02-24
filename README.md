@@ -68,7 +68,7 @@ See the full [Usage Guide](USAGE.md) for detailed examples including:
 
 - Creating schemas from JSON strings, hashes, or files
 - Basic and advanced validation
-- Output formats (`flag`, `basic`, `classic`)
+- Output formats (`flag`, `basic`, `classic`, `detailed`, `verbose`)
 - Type, numeric, string, array, and object validation
 - Schema combinators (`allOf`, `anyOf`, `oneOf`, `not`)
 - Conditional validation (`if`/`then`/`else`)
