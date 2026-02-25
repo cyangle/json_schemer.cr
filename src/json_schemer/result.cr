@@ -228,13 +228,13 @@ module JsonSchemer
     end
 
     # Classic errors as enumerable
-    def each_classic_error(&)
+    def each_classic_error(&) : Nil
       unless valid
         collect_and_yield_classic(self) { |e| yield e }
       end
     end
 
-    private def collect_and_yield_classic(result : Result, &)
+    private def collect_and_yield_classic(result : Result, &) : Nil
       if result.ignore_nested || result.nested.try(&.empty?) != false
         yield result.to_classic
       elsif n = result.nested
@@ -309,7 +309,7 @@ module JsonSchemer
       insert_property_defaults(context) { |_v, _p, _r| true }
     end
 
-    protected def collect_property_defaults(context : Schema::Context, candidates : Hash(Tuple(String, String), Array(Tuple(JSON::Any, Result, Bool))), parent_valid : Bool)
+    protected def collect_property_defaults(context : Schema::Context, candidates : Hash(Tuple(String, String), Array(Tuple(JSON::Any, Result, Bool))), parent_valid : Bool) : Nil
       n = nested
       return unless n
 
