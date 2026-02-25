@@ -86,25 +86,21 @@ module JsonSchemer
     def self.crystal_equivalent(pattern : String) : String
       result = pattern
 
-      # Replace ECMA character class escapes with ASCII-only equivalents
-      # Need to handle them outside of character classes [...] carefully
+      # Step 1: Replace ECMA character class escapes (\d, \w, \s, etc.)
+      # with ASCII-only equivalents, only outside [...] character classes
       result = replace_escapes_outside_character_classes(result)
 
-      # Convert Unicode property names to PCRE2 format
+      # Step 2: Convert Unicode property names from ECMA-262 long form to PCRE2 short form
       result = convert_unicode_properties(result)
 
-      # Convert $ anchor to \z for ECMA-262 semantics
-      # In ECMA-262, $ only matches end of string, not before trailing newline
-      # In PCRE2, $ matches end of string OR before newline at end
-      # \z in PCRE2 matches only at absolute end of string
+      # Step 3: Convert $ anchor to \z for ECMA-262 semantics
+      # (ECMA: end of string only; PCRE2 $: also matches before trailing newline)
       result = convert_dollar_anchor(result)
 
-      # Handle \cX control character escapes
-      # Both ECMA-262 and PCRE2 support \cX, but we need to ensure
-      # lowercase letters are also handled (ECMA allows \ca-\cz)
+      # Step 4: Normalize \cX control character escapes (ECMA allows lowercase \ca-\cz)
       result = convert_control_escapes(result)
 
-      # Handle unicode escapes \u{XXXX} or \uXXXX
+      # Step 5: Convert unicode escapes \u{XXXX} or \uXXXX
       result = result.gsub(UNICODE_ESCAPES) do |match|
         hex = match.match!(UNICODE_ESCAPES)[1]
         codepoint = hex.to_i(16)
@@ -145,11 +141,18 @@ module JsonSchemer
       result
     end
 
-    # Convert $ anchor to \z for ECMA-262 behavior
-    # In ECMA-262, $ only matches at the absolute end of string
-    # In PCRE2, $ also matches before a trailing newline
-    private def self.convert_dollar_anchor(pattern : String) : String
-      result = String::Builder.new
+    # Walks a regex pattern character-by-character, tracking escape state and
+    # character class depth. Yields (char, escaped, in_char_class) for each
+    # character. This is the shared state machine used by multiple conversion
+    # methods to avoid reimplementing the same boilerplate.
+    #
+    # - `escaped`: true when the character follows a backslash
+    # - `in_char_class`: true when inside [...]
+    #
+    # The block receives each character exactly once. Backslash characters that
+    # start an escape sequence are NOT yielded — only the escaped character is
+    # yielded (with `escaped = true`).
+    private def self.walk_pattern(pattern : String, &)
       i = 0
       char_class_depth = 0
       escape_next = false
@@ -158,8 +161,7 @@ module JsonSchemer
         char = pattern[i]
 
         if escape_next
-          result << '\\'
-          result << char
+          yield char, true, char_class_depth > 0
           escape_next = false
           i += 1
           next
@@ -173,25 +175,35 @@ module JsonSchemer
 
         if char == '['
           char_class_depth += 1
-          result << char
         elsif char == ']' && char_class_depth > 0
           char_class_depth -= 1
+        end
+
+        yield char, false, char_class_depth > 0
+        i += 1
+      end
+
+      # Signal trailing backslash (incomplete escape)
+      if escape_next
+        yield '\\', false, char_class_depth > 0
+      end
+    end
+
+    # Convert $ anchor to \z for ECMA-262 behavior
+    # In ECMA-262, $ only matches at the absolute end of string
+    # In PCRE2, $ also matches before a trailing newline
+    private def self.convert_dollar_anchor(pattern : String) : String
+      result = String::Builder.new
+      walk_pattern(pattern) do |char, escaped, in_char_class|
+        if escaped
+          result << '\\'
           result << char
-        elsif char == '$' && char_class_depth == 0
-          # Replace $ with \z for ECMA-262 semantics
+        elsif char == '$' && !in_char_class
           result << "\\z"
         else
           result << char
         end
-
-        i += 1
       end
-
-      # Handle trailing backslash
-      if escape_next
-        result << '\\'
-      end
-
       result.to_s
     end
 
@@ -235,16 +247,10 @@ module JsonSchemer
     # Replace character class escapes, being careful about character class context
     private def self.replace_escapes_outside_character_classes(pattern : String) : String
       result = String::Builder.new
-      i = 0
-      char_class_depth = 0
-      escape_next = false
-
-      while i < pattern.size
-        char = pattern[i]
-
-        if escape_next
-          # Check if this is a character class escape we need to replace
-          if char_class_depth == 0 && "dDwWsS".includes?(char)
+      walk_pattern(pattern) do |char, escaped, in_char_class|
+        if escaped
+          # Only replace \d, \D, \w, \W, \s, \S outside character classes
+          if !in_char_class && "dDwWsS".includes?(char)
             escape_seq = "\\#{char}"
             if replacement = ESCAPES[escape_seq]?
               result << replacement
@@ -255,32 +261,10 @@ module JsonSchemer
             result << '\\'
             result << char
           end
-          escape_next = false
-          i += 1
-          next
+        else
+          result << char
         end
-
-        if char == '\\'
-          escape_next = true
-          i += 1
-          next
-        end
-
-        if char == '['
-          char_class_depth += 1
-        elsif char == ']' && char_class_depth > 0
-          char_class_depth -= 1
-        end
-
-        result << char
-        i += 1
       end
-
-      # Handle trailing backslash
-      if escape_next
-        result << '\\'
-      end
-
       result.to_s
     end
 
@@ -321,35 +305,13 @@ module JsonSchemer
 
     # Check for escape sequences that are invalid in ECMA-262
     private def self.has_invalid_escapes?(pattern : String) : Bool
-      i = 0
-      char_class_depth = 0
-
-      while i < pattern.size
-        char = pattern[i]
-
-        if char == '\\'
-          i += 1
-          break if i >= pattern.size
-
-          next_char = pattern[i]
-
-          # Inside character class, most escapes are allowed as identity escapes
-          if char_class_depth == 0
-            # Check if this is an invalid escape outside character class
-            # \a is specifically NOT a valid ECMA-262 escape
-            if next_char == 'a'
-              return true
-            end
-          end
-        elsif char == '['
-          char_class_depth += 1
-        elsif char == ']' && char_class_depth > 0
-          char_class_depth -= 1
+      walk_pattern(pattern) do |char, escaped, in_char_class|
+        # Inside character class, most escapes are allowed as identity escapes.
+        # Outside: \a is specifically NOT a valid ECMA-262 escape.
+        if escaped && !in_char_class && char == 'a'
+          return true
         end
-
-        i += 1
       end
-
       false
     end
   end

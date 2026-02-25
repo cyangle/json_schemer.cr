@@ -75,7 +75,9 @@ module JsonSchemer
     max_redirects = 5
     current_uri = uri
 
+    # Step 1: Follow redirects up to max_redirects
     0.upto(max_redirects) do |_|
+      # Step 2: Open HTTP connection with timeouts
       client = HTTP::Client.new(current_uri)
       client.connect_timeout = 30.seconds
       client.read_timeout = 30.seconds
@@ -85,7 +87,7 @@ module JsonSchemer
       next_location = nil
 
       client.get(current_uri.request_target) do |response|
-        # 1. Check for redirects before reading body_io
+        # Step 3: Check for redirect responses before reading body
         if response.status_code.in?(301..303) || response.status_code.in?(307..308)
           location = response.headers["Location"]?
           if location && !location.empty?
@@ -95,7 +97,7 @@ module JsonSchemer
           end
         end
 
-        # 2. Prevent OOM by enforcing size limits over the stream
+        # Step 4: Enforce size limits to prevent OOM
         content_length = response.headers["Content-Length"]?.try(&.to_i64?)
         if content_length && content_length > MAX_SCHEMA_SIZE
           raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes (Content-Length: #{content_length})")
@@ -111,13 +113,12 @@ module JsonSchemer
       end
       client.close
 
+      # Step 5: Follow redirect or return parsed body
       if has_redirect && next_location
-        # Resolve relative URLs
         current_uri = current_uri.resolve(next_location)
         next
       end
 
-      # Return the response body (either final or too many redirects)
       return JSONHash.from_json(body)
     end
 
@@ -411,7 +412,7 @@ module JsonSchemer
   #   config.format = true
   # end
   # ```
-  def self.configure(&)
+  def self.configure(&) : Nil
     yield configuration
   end
 
@@ -473,7 +474,7 @@ module JsonSchemer
   end
 
   # Register vocabularies after all classes are defined
-  def self.register_vocabularies
+  def self.register_vocabularies : Nil
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/core"] = Draft202012::Vocab::CORE
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/applicator"] = Draft202012::Vocab::APPLICATOR
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/unevaluated"] = Draft202012::Vocab::UNEVALUATED

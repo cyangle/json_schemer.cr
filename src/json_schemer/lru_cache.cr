@@ -83,21 +83,21 @@ module JsonSchemer
       end
     end
 
-    def clear
+    def clear : Nil
       @cache.clear
       @head = nil
       @tail = nil
       @size = 0
     end
 
-    private def move_to_front(node : Node(K, V))
+    private def move_to_front(node : Node(K, V)) : Nil
       return if node == @head
 
       remove_node(node)
       add_to_front(node)
     end
 
-    private def add_to_front(node : Node(K, V))
+    private def add_to_front(node : Node(K, V)) : Nil
       node.next = @head
       node.prev = nil
 
@@ -109,7 +109,7 @@ module JsonSchemer
       @tail = node if @tail.nil?
     end
 
-    private def remove_node(node : Node(K, V))
+    private def remove_node(node : Node(K, V)) : Nil
       if p = node.prev
         p.next = node.next
       else
@@ -123,7 +123,7 @@ module JsonSchemer
       end
     end
 
-    private def evict_least_recent
+    private def evict_least_recent : Nil
       if t = @tail
         @cache.delete(t.key)
         remove_node(t)

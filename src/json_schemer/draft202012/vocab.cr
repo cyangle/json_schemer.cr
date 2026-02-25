@@ -93,7 +93,7 @@ module JsonSchemer
       # All keywords combined for default vocabulary
       ALL = {} of String => Keyword.class
 
-      def self.build_all
+      def self.build_all : Nil
         ALL.merge!(CORE)
         ALL.merge!(APPLICATOR)
         ALL.merge!(UNEVALUATED)
