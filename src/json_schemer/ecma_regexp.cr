@@ -119,6 +119,7 @@ module JsonSchemer
 
       result
     rescue ex
+      Log.debug { "ECMA regexp conversion failed for pattern: #{pattern}, error: #{ex.message}" }
       raise InvalidEcmaRegexp.new("Invalid ECMA regexp: #{pattern}")
     end
 
