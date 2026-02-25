@@ -84,6 +84,9 @@ module JsonSchemer
             unless subschema
               if default_map = default_mapping
                 subschema = resolve_schema_ref(default_map)
+                unless subschema
+                  Log.warn { "defaultMapping '#{default_map}' could not be resolved" }
+                end
               end
             end
 
