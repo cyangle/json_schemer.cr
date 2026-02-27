@@ -70,24 +70,62 @@ module JsonSchemer
   # Uses `HTTP::Client` to fetch the content with a 30-second timeout.
   # Limits response body size to `MAX_SCHEMA_SIZE` to prevent OOM from
   # malicious or misconfigured endpoints.
+  # Follows HTTP redirects (301/302/303/307/308) up to 5 redirects.
   NET_HTTP_REF_RESOLVER = ->(uri : URI) : JSONHash? {
-    client = HTTP::Client.new(uri)
-    client.connect_timeout = 30.seconds
-    client.read_timeout = 30.seconds
-    body = ""
-    client.get(uri.request_target) do |response|
-      content_length = response.headers["Content-Length"]?.try(&.to_i64?)
-      if content_length && content_length > MAX_SCHEMA_SIZE
-        raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes (Content-Length: #{content_length})")
+    max_redirects = 5
+    current_uri = uri
+
+    # Step 1: Follow redirects up to max_redirects
+    0.upto(max_redirects) do |_|
+      # Step 2: Open HTTP connection with timeouts
+      client = HTTP::Client.new(current_uri)
+      client.connect_timeout = 30.seconds
+      client.read_timeout = 30.seconds
+
+      body = ""
+      has_redirect = false
+      next_location = nil
+
+      begin
+        client.get(current_uri.request_target) do |response|
+          # Step 3: Check for redirect responses before reading body
+          if response.status_code.in?(301..303) || response.status_code.in?(307..308)
+            location = response.headers["Location"]?
+            if location && !location.empty?
+              has_redirect = true
+              next_location = location
+              break # exit the block
+            end
+          end
+
+          # Step 4: Enforce size limits to prevent OOM
+          content_length = response.headers["Content-Length"]?.try(&.to_i64?)
+          if content_length && content_length > MAX_SCHEMA_SIZE
+            raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes (Content-Length: #{content_length})")
+          end
+
+          buf = IO::Memory.new
+          bytes_read = IO.copy(response.body_io, buf, MAX_SCHEMA_SIZE + 1)
+          if bytes_read > MAX_SCHEMA_SIZE
+            raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes")
+          end
+
+          body = buf.to_s
+        end
+      ensure
+        client.close
       end
-      buf = IO::Memory.new
-      bytes_read = IO.copy(response.body_io, buf, MAX_SCHEMA_SIZE + 1)
-      if bytes_read > MAX_SCHEMA_SIZE
-        raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes")
+
+      # Step 5: Follow redirect or return parsed body
+      if has_redirect && next_location
+        current_uri = current_uri.resolve(next_location)
+        next
       end
-      body = buf.to_s
+
+      return JSONHash.from_json(body)
     end
-    JSONHash.from_json(body)
+
+    raise Error.new("Too many redirects (more than #{max_redirects})")
   }
 
   # Ref resolver that reads schemas from the local filesystem.
@@ -100,7 +138,16 @@ module JsonSchemer
     path = uri.path
     raise InvalidFileURI.new("must have a path") unless path
     path = path[1..] if path.matches?(WINDOWS_URI_PATH_REGEX)
-    JSONHash.from_json(File.read(URI.decode(path)))
+    decoded_path = URI.decode(path)
+    # Ensure the decoded path doesn't contain '..' path segments that would escape the base
+    # This prevents attacks like file:///etc/passwd%2f..%2f..%2fetc%2fshadow
+    # Uses segment-based check to avoid false positives on names like "my..config.json"
+    if decoded_path.split("/").includes?("..")
+      raise InvalidFileURI.new("path traversal detected: #{decoded_path}")
+    end
+    # Normalize the path to prevent directory traversal
+    normalized_path = File.expand_path(decoded_path)
+    JSONHash.from_json(File.read(normalized_path))
   }
 
   # Regexp resolver using Ruby/Crystal standard `Regex` (PCRE).
@@ -368,7 +415,7 @@ module JsonSchemer
   #   config.format = true
   # end
   # ```
-  def self.configure(&)
+  def self.configure(&) : Nil
     yield configuration
   end
 
@@ -430,7 +477,7 @@ module JsonSchemer
   end
 
   # Register vocabularies after all classes are defined
-  def self.register_vocabularies
+  def self.register_vocabularies : Nil
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/core"] = Draft202012::Vocab::CORE
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/applicator"] = Draft202012::Vocab::APPLICATOR
     VOCABULARIES["https://json-schema.org/draft/2020-12/vocab/unevaluated"] = Draft202012::Vocab::UNEVALUATED

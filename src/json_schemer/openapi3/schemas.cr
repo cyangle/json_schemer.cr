@@ -90,7 +90,7 @@ module JsonSchemer
     } of String => Format::FormatValidator
 
     # Schema registry - caches loaded schemas
-    class_getter schemas = {} of URI => JSONHash
+    class_getter schemas = LRUCache(URI, JSONHash).new(1000)
 
     # Schema resolver that looks up by URI
     SCHEMAS_RESOLVER = ->(uri : URI) : JSONHash? {
@@ -98,17 +98,17 @@ module JsonSchemer
     }
 
     def self.resolve_schema(uri : URI) : JSONHash?
-      if schema = schemas[uri]?
-        return schema
-      end
-
       @@lock.synchronize do
+        if schema = schemas.get(uri)
+          return schema
+        end
+
         if json = SCHEMA_SOURCES[uri]?
-          return schemas[uri] ||= JSONHash.from_json(json)
+          return schemas.set(uri, JSONHash.from_json(json))
         end
 
         if schema = JsonSchemer::Draft202012::Meta::SCHEMAS[uri]?
-          return schemas[uri] ||= schema
+          return schemas.set(uri, schema)
         end
       end
     end

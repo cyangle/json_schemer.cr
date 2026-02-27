@@ -115,7 +115,7 @@ module JsonSchemer
     end
 
     # Clear the entire cache
-    def clear_cache
+    def clear_cache : Nil
       @cache_mutex.synchronize do
         @cache.clear
       end
@@ -131,13 +131,13 @@ module JsonSchemer
       @cache_mutex.synchronize { @cache.get(hostname) }
     end
 
-    private def set_cache(hostname : String, result : DnsResult, expires_at : Time::Instant, stale_at : Time::Instant)
+    private def set_cache(hostname : String, result : DnsResult, expires_at : Time::Instant, stale_at : Time::Instant) : Nil
       @cache_mutex.synchronize do
         @cache.set(hostname, CacheEntry.new(result, expires_at, stale_at))
       end
     end
 
-    private def delete_cache(hostname : String)
+    private def delete_cache(hostname : String) : Nil
       @cache_mutex.synchronize { @cache.delete(hostname) }
     end
 
@@ -178,7 +178,7 @@ module JsonSchemer
       else
         DnsResult::Error
       end
-    rescue ex : Exception
+    rescue ex : IO::Error
       Log.warn { "DNS lookup failed for #{hostname}: #{ex.message}" }
       DnsResult::Error
     end

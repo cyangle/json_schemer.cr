@@ -59,9 +59,20 @@ module JsonSchemer
       p = parsed
       case p
       when Hash
-        p[key].as(Schema | Keyword)
+        val = p[key]?
+        case val
+        when Schema, Keyword
+          val
+        else
+          raise KeyError.new("Key not found or invalid type: #{key}")
+        end
       when Array
-        p[key.to_i].as(Schema)
+        idx = key.to_i?
+        if idx && (val = p[idx]?) && val.is_a?(Schema)
+          val
+        else
+          raise KeyError.new("Index not found or invalid type: #{key}")
+        end
       else
         raise KeyError.new("Key not found: #{key}")
       end

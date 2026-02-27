@@ -528,6 +528,9 @@ module JsonSchemer
         end
 
         # Required keyword
+        # Required keyword implementation with readOnly/writeOnly support.
+        # Caches effective keys per access mode to optimize repeated validations.
+        # Note: Effective keys are computed lazily and cached at the keyword instance level.
         class Required < Keyword
           # Maximum depth for BFS traversal to prevent excessive work on large schemas.
           # This is separate from the validation max_depth as it's a different traversal context.
@@ -584,7 +587,8 @@ module JsonSchemer
           # Traversal is bounded by MAX_BFS_DEPTH to prevent excessive work on large schemas.
           private def calculate_effective_keys(mode : String) : Array(String)
             inapplicable = [] of String
-            # Each entry: {schema, depth}
+
+            # Step 1: Initialize BFS with the current schema
             queue = Deque(Tuple(Schema, Int32)).new
             queue << {schema, 0}
             visited = Set(Schema).new
@@ -593,14 +597,12 @@ module JsonSchemer
               s = current[0]
               depth = current[1]
 
-              # Skip if already visited
               next if visited.includes?(s)
               visited << s
-              # Stop traversing deeper if max depth exceeded
-              if depth >= MAX_BFS_DEPTH
-                next
-              end
-              # Use _keywords_lock if necessary, but here we just read parsed
+              # Bound traversal to prevent excessive work on large schemas
+              next if depth >= MAX_BFS_DEPTH
+
+              # Step 2: Inspect properties for readOnly/writeOnly markers
               properties_kw = s.parsed.try(&.["properties"]?)
               if properties_kw.is_a?(Keyword) && properties_kw.parsed.is_a?(Hash(String, Schema))
                 properties_kw.parsed.as(Hash(String, Schema)).each do |property, subschema|
@@ -616,7 +618,7 @@ module JsonSchemer
                 end
               end
 
-              # Follow $ref
+              # Step 3: Follow $ref into referenced schemas
               if ref_kw = s.parsed.try(&.["$ref"]?)
                 if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
                   begin
@@ -627,7 +629,7 @@ module JsonSchemer
                 end
               end
 
-              # Follow allOf, anyOf, oneOf
+              # Step 4: Follow allOf, anyOf, oneOf into sub-applicators
               {"allOf", "anyOf", "oneOf"}.each do |applicator_key|
                 if app_kw = s.parsed.try(&.[applicator_key]?)
                   if app_kw.is_a?(Keyword) && app_kw.parsed.is_a?(Array(Schema))
@@ -637,6 +639,7 @@ module JsonSchemer
               end
             end
 
+            # Step 5: Filter out inapplicable keys from the required set
             inapplicable.empty? ? @required_keys : @required_keys.reject { |k| inapplicable.includes?(k) }
           end
 

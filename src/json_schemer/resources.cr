@@ -2,13 +2,14 @@ module JsonSchemer
   # Resources class for URI-keyed schema storage
   class Resources
     @resources = {} of String => Schema | Keyword
+    @mutex = Mutex.new
 
     def [](uri : URI | String) : Schema | Keyword | Nil
       @resources[uri.to_s]?
     end
 
     def []=(uri : URI | String, resource : Schema | Keyword)
-      @resources[uri.to_s] = resource
+      @mutex.synchronize { @resources[uri.to_s] = resource }
     end
 
     def fetch(uri : URI | String) : Schema | Keyword

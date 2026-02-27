@@ -44,7 +44,7 @@ module JsonSchemer
             result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: JSON::Any.new(anno))
           end
 
-          private def collect_unevaluated_items(res : Result, unevaluated_items : Set(Int32))
+          private def collect_unevaluated_items(res : Result, unevaluated_items : Set(Int32)) : Nil
             case res.source
             when Applicator::PrefixItems
               if ann = res.annotation
@@ -115,7 +115,7 @@ module JsonSchemer
             result(instance, instance_location, location, nested.all?(&.valid), nested, result_annotation: anno)
           end
 
-          private def collect_evaluated_keys(res : Result, evaluated_keys : Set(String))
+          private def collect_evaluated_keys(res : Result, evaluated_keys : Set(String)) : Nil
             case res.source
             when Applicator::Properties, Applicator::PatternProperties, Applicator::AdditionalProperties, UnevaluatedProperties
               if ann = res.annotation

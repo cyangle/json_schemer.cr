@@ -1,4 +1,14 @@
 module JsonSchemer
+  # :nodoc:
+  # Sentinel type to distinguish "not provided" from `nil`.
+  # Used by `Configuration#dup_with` so callers can explicitly pass `nil`
+  # to clear nilable options.
+  private struct Unset
+  end
+
+  # :nodoc:
+  private UNSET = Unset.new
+
   # Configuration class for schema validation options.
   #
   # This class holds all configuration options for schema validation, such as
@@ -124,24 +134,41 @@ module JsonSchemer
       end
     end
 
-    def dup_with(**options) : Configuration
+    def dup_with(
+      base_uri : URI | Unset = UNSET,
+      meta_schema : String | Schema | Unset = UNSET,
+      vocabulary : Hash(String, Bool)? | Unset = UNSET,
+      format : Bool | Unset = UNSET,
+      formats : Hash(String, Format::FormatValidator) | Unset = UNSET,
+      content_encodings : Hash(String, Content::ContentEncodingValidator) | Unset = UNSET,
+      content_media_types : Hash(String, Content::ContentMediaTypeValidator) | Unset = UNSET,
+      keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) | Unset = UNSET,
+      insert_property_defaults : Bool | Unset = UNSET,
+      property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? | Unset = UNSET,
+      ref_resolver : Proc(URI, JSONHash?) | String | Unset = UNSET,
+      regexp_resolver : Proc(String, Regex?) | String | Unset = UNSET,
+      output_format : String | Unset = UNSET,
+      access_mode : String? | Unset = UNSET,
+      max_depth : Int32 | Unset = UNSET,
+      regexp_filter : Proc(String, Bool)? | Unset = UNSET,
+    ) : Configuration
       Configuration.new(
-        base_uri: options[:base_uri]? || @base_uri,
-        meta_schema: options[:meta_schema]? || @meta_schema,
-        vocabulary: options[:vocabulary]? || @vocabulary,
-        format: options.has_key?(:format) ? options[:format].as(Bool) : @format,
-        formats: options[:formats]? || @formats,
-        content_encodings: options[:content_encodings]? || @content_encodings,
-        content_media_types: options[:content_media_types]? || @content_media_types,
-        keywords: options[:keywords]? || @keywords,
-        insert_property_defaults: options.has_key?(:insert_property_defaults) ? options[:insert_property_defaults].as(Bool) : @insert_property_defaults,
-        property_default_resolver: options[:property_default_resolver]? || @property_default_resolver,
-        ref_resolver: options[:ref_resolver]? || @ref_resolver,
-        regexp_resolver: options[:regexp_resolver]? || @regexp_resolver,
-        output_format: options[:output_format]? || @output_format,
-        access_mode: options[:access_mode]? || @access_mode,
-        max_depth: options.has_key?(:max_depth) ? options[:max_depth].as(Int32) : @max_depth,
-        regexp_filter: options.has_key?(:regexp_filter) ? options[:regexp_filter].as(Proc(String, Bool)?) : @regexp_filter
+        base_uri: base_uri.is_a?(Unset) ? @base_uri : base_uri,
+        meta_schema: meta_schema.is_a?(Unset) ? @meta_schema : meta_schema,
+        vocabulary: vocabulary.is_a?(Unset) ? @vocabulary : vocabulary,
+        format: format.is_a?(Unset) ? @format : format,
+        formats: formats.is_a?(Unset) ? @formats : formats,
+        content_encodings: content_encodings.is_a?(Unset) ? @content_encodings : content_encodings,
+        content_media_types: content_media_types.is_a?(Unset) ? @content_media_types : content_media_types,
+        keywords: keywords.is_a?(Unset) ? @keywords : keywords,
+        insert_property_defaults: insert_property_defaults.is_a?(Unset) ? @insert_property_defaults : insert_property_defaults,
+        property_default_resolver: property_default_resolver.is_a?(Unset) ? @property_default_resolver : property_default_resolver,
+        ref_resolver: ref_resolver.is_a?(Unset) ? @ref_resolver : ref_resolver,
+        regexp_resolver: regexp_resolver.is_a?(Unset) ? @regexp_resolver : regexp_resolver,
+        output_format: output_format.is_a?(Unset) ? @output_format : output_format,
+        access_mode: access_mode.is_a?(Unset) ? @access_mode : access_mode,
+        max_depth: max_depth.is_a?(Unset) ? @max_depth : max_depth,
+        regexp_filter: regexp_filter.is_a?(Unset) ? @regexp_filter : regexp_filter,
       )
     end
   end
