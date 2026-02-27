@@ -86,32 +86,35 @@ module JsonSchemer
       has_redirect = false
       next_location = nil
 
-      client.get(current_uri.request_target) do |response|
-        # Step 3: Check for redirect responses before reading body
-        if response.status_code.in?(301..303) || response.status_code.in?(307..308)
-          location = response.headers["Location"]?
-          if location && !location.empty?
-            has_redirect = true
-            next_location = location
-            break # exit the block
+      begin
+        client.get(current_uri.request_target) do |response|
+          # Step 3: Check for redirect responses before reading body
+          if response.status_code.in?(301..303) || response.status_code.in?(307..308)
+            location = response.headers["Location"]?
+            if location && !location.empty?
+              has_redirect = true
+              next_location = location
+              break # exit the block
+            end
           end
-        end
 
-        # Step 4: Enforce size limits to prevent OOM
-        content_length = response.headers["Content-Length"]?.try(&.to_i64?)
-        if content_length && content_length > MAX_SCHEMA_SIZE
-          raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes (Content-Length: #{content_length})")
-        end
+          # Step 4: Enforce size limits to prevent OOM
+          content_length = response.headers["Content-Length"]?.try(&.to_i64?)
+          if content_length && content_length > MAX_SCHEMA_SIZE
+            raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes (Content-Length: #{content_length})")
+          end
 
-        buf = IO::Memory.new
-        bytes_read = IO.copy(response.body_io, buf, MAX_SCHEMA_SIZE + 1)
-        if bytes_read > MAX_SCHEMA_SIZE
-          raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes")
-        end
+          buf = IO::Memory.new
+          bytes_read = IO.copy(response.body_io, buf, MAX_SCHEMA_SIZE + 1)
+          if bytes_read > MAX_SCHEMA_SIZE
+            raise Error.new("Schema response exceeds maximum size of #{MAX_SCHEMA_SIZE} bytes")
+          end
 
-        body = buf.to_s
+          body = buf.to_s
+        end
+      ensure
+        client.close
       end
-      client.close
 
       # Step 5: Follow redirect or return parsed body
       if has_redirect && next_location

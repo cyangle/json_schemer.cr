@@ -115,8 +115,8 @@ module JsonSchemer
     NOT_KEYWORD_CLASS        = Draft202012::Vocab::Applicator::Not
     PROPERTIES_KEYWORD_CLASS = Draft202012::Vocab::Applicator::Properties
 
-    property! base_uri : URI?
-    property! meta_schema : Schema | String | Nil
+    property base_uri : URI = URI.parse("")
+    property meta_schema : Schema | String = ""
 
     getter! root : Schema?
     getter! configuration : Configuration?
@@ -472,22 +472,15 @@ module JsonSchemer
         @absolute_keyword_location ||= begin
           buri = base_uri
           frag = buri.fragment
-          if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
+          p = @parent
+          if p.nil? || (!p.is_a?(Schema) || p.base_uri != buri) && (frag.nil? || frag.empty?)
             uri = buri.dup
             uri.fragment = ""
             uri.to_s
           elsif kw = @keyword
-            if p = @parent
-              "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
-            else
-              ""
-            end
+            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
           else
-            if p = @parent
-              p.absolute_keyword_location
-            else
-              ""
-            end
+            p.absolute_keyword_location
           end
         end
       end

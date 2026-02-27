@@ -24,17 +24,22 @@ module JsonSchemer
             validator = root.fetch_format(format_name)
 
             if validator
-              {% if flag?(:with_simpleidn) %}
-                begin
+              begin
+                {% if flag?(:with_simpleidn) %}
+                  begin
+                    valid = validator.call(instance, format_name)
+                    result(instance, instance_location, location, valid, type: "format", result_annotation: value)
+                  rescue ex : SimpleIDN::ConversionError
+                    result(instance, instance_location, location, false, type: "format", details: {"error" => JSON::Any.new(ex.message)})
+                  end
+                {% else %}
                   valid = validator.call(instance, format_name)
                   result(instance, instance_location, location, valid, type: "format", result_annotation: value)
-                rescue ex : SimpleIDN::ConversionError
-                  result(instance, instance_location, location, false, type: "format", details: {"error" => JSON::Any.new(ex.message)})
-                end
-              {% else %}
-                valid = validator.call(instance, format_name)
-                result(instance, instance_location, location, valid, type: "format", result_annotation: value)
-              {% end %}
+                {% end %}
+              rescue ex : Exception
+                Log.debug { "Format validator raised: #{ex.class} - #{ex.message}" }
+                result(instance, instance_location, location, false, type: "format", details: {"error" => JSON::Any.new("Validator raised #{ex.class}: #{ex.message}")})
+              end
             else
               # Unknown format - pass by default
               result(instance, instance_location, location, true, result_annotation: value)

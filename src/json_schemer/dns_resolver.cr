@@ -178,7 +178,7 @@ module JsonSchemer
       else
         DnsResult::Error
       end
-    rescue ex : Exception
+    rescue ex : IO::Error
       Log.warn { "DNS lookup failed for #{hostname}: #{ex.message}" }
       DnsResult::Error
     end

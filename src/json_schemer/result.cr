@@ -319,21 +319,19 @@ module JsonSchemer
 
         child_valid = parent_valid && child_result.valid
 
-        if child_result.source.is_a?(Draft202012::Vocab::Applicator::Properties)
-          properties_kw = child_result.source.as(Draft202012::Vocab::Applicator::Properties)
-
+        child_source = child_result.source
+        if child_source.is_a?(Draft202012::Vocab::Applicator::Properties)
           if child_result.instance.raw.is_a?(Hash)
             instance_hash = child_result.instance.as_h
             # Resolve pointer once
             instance_ptr = Location.resolve(child_result.instance_location)
 
-            properties_kw.schemas.each do |property, prop_schema|
+            child_source.schemas.each do |property, prop_schema|
               next if instance_hash.has_key?(property)
 
               default_kw = prop_schema.parsed["default"]?
-              if default_kw.is_a?(Keyword)
-                default_value = default_kw.as(Draft202012::Vocab::MetaData::Default).cloned_value
-                candidates[{instance_ptr, property}] << {default_value, child_result, child_valid}
+              if default_kw.is_a?(Draft202012::Vocab::MetaData::Default)
+                candidates[{instance_ptr, property}] << {default_kw.cloned_value, child_result, child_valid}
               end
             end
           end
