@@ -528,6 +528,9 @@ module JsonSchemer
         end
 
         # Required keyword
+        # Required keyword implementation with readOnly/writeOnly support.
+        # Caches effective keys per access mode to optimize repeated validations.
+        # Note: Effective keys are computed lazily and cached at the keyword instance level.
         class Required < Keyword
           # Maximum depth for BFS traversal to prevent excessive work on large schemas.
           # This is separate from the validation max_depth as it's a different traversal context.
