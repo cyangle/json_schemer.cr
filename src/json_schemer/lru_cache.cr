@@ -3,6 +3,7 @@ module JsonSchemer
   # All operations are O(1).
   #
   # NOTE: This class is not thread-safe. Synchronization must be handled by the caller.
+  # For high-concurrency environments, consider using a thread-safe wrapper like `CachedRefResolver`.
   class LRUCache(K, V)
     private class Node(K, V)
       property key : K
