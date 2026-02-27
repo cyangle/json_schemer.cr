@@ -5,7 +5,7 @@ module JsonSchemer
     @mutex = Mutex.new
 
     def [](uri : URI | String) : Schema | Keyword | Nil
-      @mutex.synchronize { @resources[uri.to_s]? }
+      @resources[uri.to_s]?
     end
 
     def []=(uri : URI | String, resource : Schema | Keyword)
@@ -13,11 +13,11 @@ module JsonSchemer
     end
 
     def fetch(uri : URI | String) : Schema | Keyword
-      @mutex.synchronize { @resources[uri.to_s]? } || raise KeyError.new("Resource not found: #{uri}")
+      @resources[uri.to_s]? || raise KeyError.new("Resource not found: #{uri}")
     end
 
     def key?(uri : URI | String) : Bool
-      @mutex.synchronize { @resources.has_key?(uri.to_s) }
+      @resources.has_key?(uri.to_s)
     end
   end
 end

@@ -98,11 +98,11 @@ module JsonSchemer
     }
 
     def self.resolve_schema(uri : URI) : JSONHash?
-      @@lock.synchronize do
-        if schema = schemas.get(uri)
-          return schema
-        end
+      if schema = schemas.get(uri)
+        return schema
+      end
 
+      @@lock.synchronize do
         if json = SCHEMA_SOURCES[uri]?
           return schemas.set(uri, JSONHash.from_json(json))
         end
