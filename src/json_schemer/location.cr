@@ -12,7 +12,7 @@ module JsonSchemer
       @resolved : String?
       @lock : Mutex = Mutex.new(protection: :reentrant)
 
-      def initialize(@name = nil, @parent = nil)
+      def initialize(@name : String? = nil, @parent : Node? = nil)
       end
 
       def resolve : String

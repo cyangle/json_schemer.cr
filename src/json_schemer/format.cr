@@ -193,28 +193,29 @@ module JsonSchemer
 
     # Validates a URI string according to RFC 3986.
     def self.valid_uri?(data : String) : Bool
-      return false unless data.ascii_only?
-      return false if RegexpHelper.matches?(URI_DISALLOWED_CHARS, data)
-      return false if RegexpHelper.matches?(URI_BRACKET_IN_USERINFO, data)
-      begin
-        uri = URI.parse(data)
-        return false if RegexpHelper.matches?(INVALID_QUERY_REGEX, uri.query || "")
-        scheme = uri.scheme
-        !scheme.nil? && !scheme.empty?
-      rescue ex : URI::Error
-        false
-      end
+      validate_uri_structure(data, require_scheme: true)
     end
 
     # Validates a URI reference string (relative or absolute).
     def self.valid_uri_reference?(data : String) : Bool
+      validate_uri_structure(data, require_scheme: false)
+    end
+
+    # Shared URI/URI-reference validation.
+    # The only difference is whether a non-empty scheme is required.
+    private def self.validate_uri_structure(data : String, require_scheme : Bool) : Bool
       return false unless data.ascii_only?
       return false if RegexpHelper.matches?(URI_DISALLOWED_CHARS, data)
       return false if RegexpHelper.matches?(URI_BRACKET_IN_USERINFO, data)
       begin
         uri = URI.parse(data)
         return false if RegexpHelper.matches?(INVALID_QUERY_REGEX, uri.query || "")
-        true
+        if require_scheme
+          scheme = uri.scheme
+          !scheme.nil? && !scheme.empty?
+        else
+          true
+        end
       rescue ex : URI::Error
         false
       end
@@ -279,40 +280,8 @@ module JsonSchemer
       return false unless parts
       local_part, domain_part = parts
 
-      # Validate local part
-      if local_part.starts_with?('"') && local_part.ends_with?('"')
-        # Quoted string - allow most characters including spaces and @
-        return false if local_part.size < 2
-        # Content between quotes should not have unescaped quotes
-        inner = local_part[1...-1]
-        # Simple validation: no null chars, backslash escapes are valid
-        return false if inner.includes?('\0')
-      else
-        # Unquoted local part
-        # Cannot start or end with a dot
-        return false if local_part.starts_with?('.') || local_part.ends_with?('.')
-        # Cannot have consecutive dots
-        return false if local_part.includes?("..")
-        # Must only contain valid characters
-        return false unless RegexpHelper.matches?(/\A[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+\z/, local_part)
-      end
-
-      # Validate domain part
-      if domain_part.starts_with?('[') && domain_part.ends_with?(']')
-        # IP address literal
-        ip_literal = domain_part[1...-1]
-        if ip_literal.starts_with?("IPv6:")
-          # IPv6 address
-          valid_ip?(ip_literal[5..], Socket::Family::INET6)
-        else
-          # IPv4 address
-          valid_ip?(ip_literal, Socket::Family::INET)
-        end
-      else
-        # Domain name - must not contain = or other invalid chars
-        return false if domain_part.includes?('=')
-        valid_hostname?(domain_part)
-      end
+      return false unless validate_local_part(local_part, allow_unicode: false)
+      validate_domain_part(domain_part, allow_unicode: false)
     end
 
     # Validates an internationalized email address (IDN email).
@@ -323,24 +292,43 @@ module JsonSchemer
       return false unless parts
       local_part, domain_part = parts
 
-      # Validate local part - for IDN emails, allow Unicode letters in unquoted part
+      return false unless validate_local_part(local_part, allow_unicode: true)
+      validate_domain_part(domain_part, allow_unicode: true)
+    end
+
+    # Shared local part validation for email/IDN-email.
+    # When `allow_unicode` is false, only ASCII characters are permitted.
+    private def self.validate_local_part(local_part : String, allow_unicode : Bool) : Bool
       if local_part.starts_with?('"') && local_part.ends_with?('"')
+        # Quoted string - allow most characters including spaces and @
         return false if local_part.size < 2
         inner = local_part[1...-1]
         return false if inner.includes?('\0')
       else
+        # Unquoted local part
         return false if local_part.starts_with?('.') || local_part.ends_with?('.')
         return false if local_part.includes?("..")
-        # Allow Unicode letters and common email special chars
-        local_part.each_char do |char|
-          unless char.letter? || char.ascii_number? || ".!#$%&'*+/=?^_`{|}~-".includes?(char)
-            return false
+        if allow_unicode
+          # Allow Unicode letters and common email special chars
+          local_part.each_char do |char|
+            unless char.letter? || char.ascii_number? || ".!#$%&'*+/=?^_`{|}~-".includes?(char)
+              return false
+            end
           end
+        else
+          # ASCII-only: must only contain valid characters
+          return false unless RegexpHelper.matches?(/\A[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+\z/, local_part)
         end
       end
+      true
+    end
 
-      # Validate domain part - allow Unicode characters (IDN)
+    # Shared domain part validation for email/IDN-email.
+    # When `allow_unicode` is false, validates as ASCII hostname;
+    # when true, validates as IDN hostname.
+    private def self.validate_domain_part(domain_part : String, allow_unicode : Bool) : Bool
       if domain_part.starts_with?('[') && domain_part.ends_with?(']')
+        # IP address literal
         ip_literal = domain_part[1...-1]
         if ip_literal.starts_with?("IPv6:")
           valid_ip?(ip_literal[5..], Socket::Family::INET6)
@@ -348,8 +336,12 @@ module JsonSchemer
           valid_ip?(ip_literal, Socket::Family::INET)
         end
       else
-        # For IDN hostnames, allow Unicode letters
-        valid_idn_hostname?(domain_part)
+        if allow_unicode
+          valid_idn_hostname?(domain_part)
+        else
+          return false if domain_part.includes?('=')
+          valid_hostname?(domain_part)
+        end
       end
     end
 

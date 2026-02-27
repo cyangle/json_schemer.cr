@@ -115,8 +115,8 @@ module JsonSchemer
     NOT_KEYWORD_CLASS        = Draft202012::Vocab::Applicator::Not
     PROPERTIES_KEYWORD_CLASS = Draft202012::Vocab::Applicator::Properties
 
-    property! base_uri : URI?
-    property! meta_schema : Schema | String | Nil
+    property base_uri : URI = URI.parse("")
+    property meta_schema : Schema | String = ""
 
     getter! root : Schema?
     getter! configuration : Configuration?
@@ -209,6 +209,7 @@ module JsonSchemer
       max_depth : Int32? = nil,
       regexp_filter : Proc(String, Bool)? = nil,
     )
+      # Step 1: Compute location in the schema tree
       @location = if parent
                     kw = keyword || ""
                     if !kw.empty?
@@ -220,7 +221,7 @@ module JsonSchemer
                     Location.root
                   end
 
-      # Convert value to JSON::Any
+      # Step 2: Normalize value to JSON::Any
       @value = case value
                when JSON::Any
                  value
@@ -234,7 +235,7 @@ module JsonSchemer
       @root = root || self
       @keyword = keyword || ""
 
-      # Use parent configuration as base if parent exists
+      # Step 3: Resolve configuration (inherit from parent or use provided/global)
       base_config = if parent.is_a?(Schema)
                       parent.configuration
                     elsif parent.is_a?(Keyword)
@@ -243,6 +244,7 @@ module JsonSchemer
                       configuration || JsonSchemer.configuration
                     end
 
+      # Step 4: Build merged configuration (explicit args override inherited values)
       config = Configuration.new(
         base_uri: base_uri || base_config.base_uri,
         meta_schema: meta_schema || base_config.meta_schema,
@@ -271,6 +273,7 @@ module JsonSchemer
       @keywords = nil
       @keyword_order = nil
 
+      # Step 5: Parse keywords and determine which need adjacent results
       @parsed = {} of String => Keyword
       parse
       @needs_adjacent_results = parsed.keys.any? { |k| ADJACENT_CONSUMERS.includes?(k) }
@@ -469,22 +472,15 @@ module JsonSchemer
         @absolute_keyword_location ||= begin
           buri = base_uri
           frag = buri.fragment
-          if @parent.nil? || (!@parent.is_a?(Schema) || @parent.as(Schema).base_uri != buri) && (frag.nil? || frag.empty?)
+          p = @parent
+          if p.nil? || (!p.is_a?(Schema) || p.base_uri != buri) && (frag.nil? || frag.empty?)
             uri = buri.dup
             uri.fragment = ""
             uri.to_s
           elsif kw = @keyword
-            if p = @parent
-              "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
-            else
-              ""
-            end
+            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
           else
-            if p = @parent
-              p.absolute_keyword_location
-            else
-              ""
-            end
+            p.absolute_keyword_location
           end
         end
       end
@@ -579,6 +575,7 @@ module JsonSchemer
     def bundle : JSON::Any
       return value unless value.as_h?
 
+      # Step 1: Set up compound document with $id and $schema
       meta = resolved_meta_schema
       id_keyword = meta.id_keyword
       defs_keyword = meta.defs_keyword
@@ -587,6 +584,7 @@ module JsonSchemer
       compound_document[id_keyword] = JSON::Any.new(base_uri.to_s)
       compound_document["$schema"] = JSON::Any.new(meta.base_uri.to_s)
 
+      # Step 2: Prepare embedded resources container (reuse existing $defs if present)
       embedded_resources = if compound_document.has_key?(defs_keyword)
                              compound_document[defs_keyword].as_h.dup
                            else
@@ -594,6 +592,7 @@ module JsonSchemer
                            end
       compound_document[defs_keyword] = JSON::Any.new(embedded_resources)
 
+      # Step 3: Handle exclusive $ref (older drafts) — wrap in allOf
       kws = meta.keywords
       ref_keyword_class = kws ? kws["$ref"]? : nil
       if ref_keyword_class && ref_keyword_class.exclusive? && compound_document.has_key?("$ref")
@@ -609,6 +608,7 @@ module JsonSchemer
         compound_document["allOf"] = JSON::Any.new(all_of)
       end
 
+      # Step 4: BFS traversal — walk the schema tree collecting external $ref targets
       queue = Deque(Schema | Keyword | Hash(String, Keyword) | Array(Schema)).new
       queue << self
 
@@ -619,6 +619,7 @@ module JsonSchemer
         when Schema
           queue << item.parsed
         when Keyword
+          # Check if this keyword is a $ref or $dynamicRef pointing to an external schema
           is_ref = false
           ref_id = ""
           ref_schema_root = nil
@@ -638,6 +639,7 @@ module JsonSchemer
           end
 
           if is_ref && ref_schema_root
+            # Embed the external schema if not already present
             if ref_schema_root != root && !embedded_resources.has_key?(ref_id)
               embedded_resource = ref_schema_root.value.as_h.dup
               embedded_resource[id_keyword] = JSON::Any.new(ref_id)
@@ -647,6 +649,7 @@ module JsonSchemer
               queue << ref_schema_root
             end
           else
+            # Not a ref — continue traversal into subschemas
             p = item.parsed
             case p
             when Schema
@@ -707,42 +710,31 @@ module JsonSchemer
 
     # Fetch format validator
     def fetch_format(format_name : String) : Format::FormatValidator?
-      configuration.formats[format_name]? ||
-        begin
-          meta = resolved_meta_schema
-          # Prevent infinite recursion: don't look in meta_schema if it's the same as self
-          if meta != self && meta.is_a?(Schema)
-            meta.fetch_format(format_name)
-          else
-            nil
-          end
-        end
+      fetch_from_meta_chain(configuration.formats[format_name]?) { |meta| meta.fetch_format(format_name) }
     end
 
     # Fetch content encoding
     def fetch_content_encoding(encoding : String) : Content::ContentEncodingValidator?
-      configuration.content_encodings[encoding]? ||
-        begin
-          meta = resolved_meta_schema
-          if meta != self && meta.is_a?(Schema)
-            meta.fetch_content_encoding(encoding)
-          else
-            nil
-          end
-        end
+      fetch_from_meta_chain(configuration.content_encodings[encoding]?) { |meta| meta.fetch_content_encoding(encoding) }
     end
 
     # Fetch content media type
     def fetch_content_media_type(media_type : String) : Content::ContentMediaTypeValidator?
-      configuration.content_media_types[media_type]? ||
-        begin
-          meta = resolved_meta_schema
-          if meta != self && meta.is_a?(Schema)
-            meta.fetch_content_media_type(media_type)
-          else
-            nil
-          end
+      fetch_from_meta_chain(configuration.content_media_types[media_type]?) { |meta| meta.fetch_content_media_type(media_type) }
+    end
+
+    # Shared lookup pattern: return the local value if present, otherwise
+    # walk up the meta-schema chain. Prevents infinite recursion by
+    # stopping when the meta-schema is `self`.
+    private def fetch_from_meta_chain(local, &)
+      local || begin
+        meta = resolved_meta_schema
+        if meta != self && meta.is_a?(Schema)
+          yield meta
+        else
+          nil
         end
+      end
     end
 
     # ID keyword name
@@ -773,7 +765,7 @@ module JsonSchemer
       io << ">"
     end
 
-    private def parse
+    private def parse : Nil
       val = value
       @parsed = {} of String => Keyword
 
