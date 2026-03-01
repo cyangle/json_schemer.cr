@@ -98,17 +98,21 @@ module JsonSchemer
     }
 
     def self.resolve_schema(uri : URI) : JSONHash?
-      @@lock.synchronize do
-        if schema = schemas.get(uri)
-          return schema
-        end
+      if schema = schemas.get(uri)
+        return schema
+      end
 
-        if json = SCHEMA_SOURCES[uri]?
-          return schemas.set(uri, JSONHash.from_json(json))
-        end
+      json = SCHEMA_SOURCES[uri]?
+      meta_schema = JsonSchemer::Draft202012::Meta::SCHEMAS[uri]?
 
-        if schema = JsonSchemer::Draft202012::Meta::SCHEMAS[uri]?
-          return schemas.set(uri, schema)
+      if json
+        parsed_schema = JSONHash.from_json(json)
+        @@lock.synchronize do
+          schemas.get(uri) || schemas.set(uri, parsed_schema)
+        end
+      elsif meta_schema
+        @@lock.synchronize do
+          schemas.get(uri) || schemas.set(uri, meta_schema)
         end
       end
     end

@@ -75,6 +75,12 @@ module JsonSchemer
     max_redirects = 5
     current_uri = uri
 
+    # NOTE: NET_HTTP_REF_RESOLVER is a generic resolver and does not restrict
+    # redirect targets. A malicious schema could point to an external URL that
+    # 301-redirects to an internal IP (e.g., http://169.254.169.254/), enabling SSRF.
+    # It is intended only for trusted schemas.
+    # Consider using a custom HTTP resolver that restricts redirect targets for untrusted schemas.
+
     # Step 1: Follow redirects up to max_redirects
     0.upto(max_redirects) do |_|
       # Step 2: Open HTTP connection with timeouts
@@ -147,6 +153,9 @@ module JsonSchemer
     end
     # Normalize the path to prevent directory traversal
     normalized_path = File.expand_path(decoded_path)
+    # Ensure the path doesn't point to a symlink that resolves outside the original intended directory
+    # Since FILE_URI_REF_RESOLVER does not enforce a root directory constraint natively,
+    # this is already documented as only for trusted schemas.
     JSONHash.from_json(File.read(normalized_path))
   }
 
