@@ -364,7 +364,11 @@ module JsonSchemer
       tokens.each do |token|
         case result.raw
         when Array
-          result = result.as_a[token.to_i]?
+          if token_int = token.to_i?
+            result = result.as_a[token_int]?
+          else
+            return nil
+          end
           return nil unless result
         when Hash
           result = result.as_h[token]?

@@ -84,6 +84,11 @@ module JsonSchemer
     ESCAPE_PATTERN = /\\[dDwWsS]/
 
     def self.crystal_equivalent(pattern : String) : String
+      # Step 0: Reject invalid escape sequences
+      if has_invalid_escapes?(pattern)
+        raise InvalidEcmaRegexp.new("Invalid ECMA regexp: contains invalid escape sequence")
+      end
+
       result = pattern
 
       # Step 1: Replace ECMA character class escapes (\d, \w, \s, etc.)
@@ -213,32 +218,39 @@ module JsonSchemer
     private def self.convert_control_escapes(pattern : String) : String
       result = String::Builder.new
       i = 0
+      escape_next = false
 
       while i < pattern.size
         char = pattern[i]
 
-        if char == '\\' && i + 1 < pattern.size
-          next_char = pattern[i + 1]
-
-          if next_char == 'c' && i + 2 < pattern.size
-            control_char = pattern[i + 2]
-            # ECMA-262: \cX where X is a-z or A-Z
+        if escape_next
+          if char == 'c' && i + 1 < pattern.size
+            control_char = pattern[i + 1]
             if control_char.ascii_letter?
-              # Convert to uppercase for PCRE2 compatibility
-              result << "\\c"
-              result << control_char.upcase
-              i += 3
+              result << "\\c" << control_char.upcase
+              escape_next = false
+              i += 2
               next
             end
           end
-
-          # Not a control escape, copy as-is
-          result << char
+          result << '\\' << char
+          escape_next = false
           i += 1
-        else
-          result << char
-          i += 1
+          next
         end
+
+        if char == '\\'
+          escape_next = true
+          i += 1
+          next
+        end
+
+        result << char
+        i += 1
+      end
+
+      if escape_next
+        result << '\\'
       end
 
       result.to_s
@@ -308,7 +320,7 @@ module JsonSchemer
       walk_pattern(pattern) do |char, escaped, in_char_class|
         # Inside character class, most escapes are allowed as identity escapes.
         # Outside: \a is specifically NOT a valid ECMA-262 escape.
-        if escaped && !in_char_class && char == 'a'
+        if escaped && !in_char_class && char.ascii_letter? && !VALID_ECMA_ESCAPES.includes?(char)
           return true
         end
       end
