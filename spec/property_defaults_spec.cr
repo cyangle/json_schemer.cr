@@ -317,4 +317,84 @@ describe "Property Defaults" do
       found_context_warning.should be_true
     end
   end
+
+  describe "insert_property_defaults inheritance" do
+    it "propagates insert_property_defaults to subschemas via $ref" do
+      ref_schema = {
+        "type"       => JSON::Any.new("object"),
+        "properties" => JSON::Any.new({
+          "role" => JSON::Any.new({
+            "type"    => JSON::Any.new("string"),
+            "default" => JSON::Any.new("viewer"),
+          } of String => JSON::Any),
+        } of String => JSON::Any),
+      } of String => JSON::Any
+
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({
+          "type": "object",
+          "properties": {
+            "user": {"$ref": "http://example.com/user.json"}
+          }
+        })).as_h,
+        insert_property_defaults: true,
+        ref_resolver: ->(uri : URI) { uri.to_s == "http://example.com/user.json" ? ref_schema : nil }
+      )
+
+      data = JSON.parse(%q({"user": {}}))
+      schema.validate(data)
+      data.as_h["user"].as_h["role"]?.try(&.as_s).should eq("viewer")
+    end
+
+    it "inherits insert_property_defaults from parent config to child schemas" do
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({
+          "$defs": {
+            "address": {
+              "type": "object",
+              "properties": {
+                "country": {"type": "string", "default": "US"}
+              }
+            }
+          },
+          "type": "object",
+          "properties": {
+            "address": {"$ref": "#/$defs/address"}
+          }
+        })).as_h,
+        insert_property_defaults: true
+      )
+
+      data = JSON.parse(%q({"address": {}}))
+      schema.validate(data)
+      data.as_h["address"].as_h["country"]?.try(&.as_s).should eq("US")
+    end
+
+    it "does not insert defaults in subschemas when insert_property_defaults is false" do
+      ref_schema = {
+        "type"       => JSON::Any.new("object"),
+        "properties" => JSON::Any.new({
+          "role" => JSON::Any.new({
+            "type"    => JSON::Any.new("string"),
+            "default" => JSON::Any.new("viewer"),
+          } of String => JSON::Any),
+        } of String => JSON::Any),
+      } of String => JSON::Any
+
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({
+          "type": "object",
+          "properties": {
+            "user": {"$ref": "http://example.com/user.json"}
+          }
+        })).as_h,
+        insert_property_defaults: false,
+        ref_resolver: ->(uri : URI) { uri.to_s == "http://example.com/user.json" ? ref_schema : nil }
+      )
+
+      data = JSON.parse(%q({"user": {}}))
+      schema.validate(data)
+      data.as_h["user"].as_h.has_key?("role").should be_false
+    end
+  end
 end
