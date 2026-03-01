@@ -211,7 +211,7 @@ module JsonSchemer
     content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
     content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
     keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
-    insert_property_defaults : Bool = false,
+    insert_property_defaults : Bool? = nil,
     property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
     ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
     regexp_resolver : Proc(String, Regex?) | String | Nil = nil,

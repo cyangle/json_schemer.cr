@@ -200,7 +200,7 @@ module JsonSchemer
       content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
       content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
       keywords_config : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
-      insert_property_defaults : Bool = false,
+      insert_property_defaults : Bool? = nil,
       property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
@@ -254,7 +254,7 @@ module JsonSchemer
         content_encodings: content_encodings || base_config.content_encodings,
         content_media_types: content_media_types || base_config.content_media_types,
         keywords: keywords_config || base_config.keywords,
-        insert_property_defaults: insert_property_defaults,
+        insert_property_defaults: insert_property_defaults.nil? ? base_config.insert_property_defaults : insert_property_defaults,
         property_default_resolver: property_default_resolver || base_config.property_default_resolver,
         ref_resolver: ref_resolver || base_config.ref_resolver,
         regexp_resolver: regexp_resolver || base_config.regexp_resolver,
@@ -853,7 +853,9 @@ module JsonSchemer
         regexp_resolver: regexp_resolver,
         formats: configuration.formats,
         content_encodings: configuration.content_encodings,
-        content_media_types: configuration.content_media_types
+        content_media_types: configuration.content_media_types,
+        insert_property_defaults: configuration.insert_property_defaults,
+        property_default_resolver: configuration.property_default_resolver
       )
 
       remote_uri = remote.base_uri.dup
