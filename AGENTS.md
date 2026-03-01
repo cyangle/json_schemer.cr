@@ -414,3 +414,5 @@ git submodule update --remote JSON-Schema-Test-Suite
 | **JsonSchemer.schema() has 15+ parameters** | Long signature, but ergonomic inline configuration without builder boilerplate. Internally consolidated into `Configuration` object. |
 | **Vocabulary execution order matters** | `Applicator` runs before `Validation` so `maxContains` can read `contains` annotation. Custom meta-schemas must preserve this ordering. |
 | **BigDecimal for numeric constraints** | Slight performance overhead vs Float64, but preserves precision for integers > 2^53-1 (Int64::MAX cannot be precisely represented as Float64). |
+| **Resources: unsynchronized reads with synchronized writes** | Writes during construction only; reads during validation. Safe initialize-then-read. @mutex on []= is defense-in-depth. |
+| **Location::Node#join double-checked lock** | Schema nodes built during construction with bounded key set, read-only during validation. Instance nodes are per-validate(), never shared. `||=` inside lock handles races. |
