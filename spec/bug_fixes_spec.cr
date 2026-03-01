@@ -72,8 +72,9 @@ describe "Bug Fixes" do
       schema2 = JsonSchemer.schema(%q({"format": "email"}))
       schema2.valid?(JSON::Any.new("invalid")).should be_false
 
+      # Restore global config to default
       JsonSchemer.configure do |config|
-        config.format = false
+        config.format = true
       end
     end
   end
