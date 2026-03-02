@@ -28,6 +28,7 @@ module JsonSchemer
 
         # ContentMediaType keyword
         class ContentMediaType < Keyword
+          # NOTE: Keyword must be listed in JsonSchemer::Schema::ADJACENT_CONSUMERS
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(String)
               return result(instance, instance_location, location, true)
@@ -67,6 +68,7 @@ module JsonSchemer
             @subschema = subschema(value)
           end
 
+          # NOTE: Keyword must be listed in JsonSchemer::Schema::ADJACENT_CONSUMERS
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             # contentSchema only applies when contentMediaType is present
             media_type_result = context.adjacent_results.try(&.[ContentMediaType]?)
