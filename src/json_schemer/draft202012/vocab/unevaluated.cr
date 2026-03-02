@@ -18,6 +18,7 @@ module JsonSchemer
             @subschema = subschema(value)
           end
 
+          # NOTE: Keyword must be listed in JsonSchemer::Schema::ADJACENT_CONSUMERS
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Array)
               return result(instance, instance_location, location, true)
@@ -88,6 +89,7 @@ module JsonSchemer
             @subschema = subschema(value)
           end
 
+          # NOTE: Keyword must be listed in JsonSchemer::Schema::ADJACENT_CONSUMERS
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             unless instance.raw.is_a?(Hash)
               return result(instance, instance_location, location, true)

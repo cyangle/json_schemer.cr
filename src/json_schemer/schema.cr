@@ -200,7 +200,7 @@ module JsonSchemer
       content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
       content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
       keywords_config : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
-      insert_property_defaults : Bool = false,
+      insert_property_defaults : Bool? = nil,
       property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
@@ -245,23 +245,23 @@ module JsonSchemer
                     end
 
       # Step 4: Build merged configuration (explicit args override inherited values)
-      config = Configuration.new(
-        base_uri: base_uri || base_config.base_uri,
-        meta_schema: meta_schema || base_config.meta_schema,
-        vocabulary: vocabulary || base_config.vocabulary,
-        format: format.nil? ? base_config.format : format,
-        formats: formats || base_config.formats,
-        content_encodings: content_encodings || base_config.content_encodings,
-        content_media_types: content_media_types || base_config.content_media_types,
-        keywords: keywords_config || base_config.keywords,
-        insert_property_defaults: insert_property_defaults,
-        property_default_resolver: property_default_resolver || base_config.property_default_resolver,
-        ref_resolver: ref_resolver || base_config.ref_resolver,
-        regexp_resolver: regexp_resolver || base_config.regexp_resolver,
-        output_format: output_format || base_config.output_format,
-        access_mode: access_mode || base_config.access_mode,
-        max_depth: max_depth || base_config.max_depth,
-        regexp_filter: regexp_filter || base_config.regexp_filter
+      config = base_config.dup_with(
+        base_uri: base_uri.nil? ? UNSET : base_uri,
+        meta_schema: meta_schema.nil? ? UNSET : meta_schema,
+        vocabulary: vocabulary.nil? ? UNSET : vocabulary,
+        format: format.nil? ? UNSET : format,
+        formats: formats.nil? ? UNSET : formats,
+        content_encodings: content_encodings.nil? ? UNSET : content_encodings,
+        content_media_types: content_media_types.nil? ? UNSET : content_media_types,
+        keywords: keywords_config.nil? ? UNSET : keywords_config,
+        insert_property_defaults: insert_property_defaults.nil? ? UNSET : insert_property_defaults,
+        property_default_resolver: property_default_resolver.nil? ? UNSET : property_default_resolver,
+        ref_resolver: ref_resolver.nil? ? UNSET : ref_resolver,
+        regexp_resolver: regexp_resolver.nil? ? UNSET : regexp_resolver,
+        output_format: output_format.nil? ? UNSET : output_format,
+        access_mode: access_mode.nil? ? UNSET : access_mode,
+        max_depth: max_depth.nil? ? UNSET : max_depth,
+        regexp_filter: regexp_filter.nil? ? UNSET : regexp_filter
       )
       @configuration = config
 
@@ -455,8 +455,8 @@ module JsonSchemer
     def schema_pointer : String
       @schema_pointer || @lock.synchronize do
         @schema_pointer ||= if p = @parent
-                              if kw = @keyword
-                                "#{p.schema_pointer}/#{Location.escape_json_pointer_token(kw)}"
+                              if !@keyword.empty?
+                                "#{p.schema_pointer}/#{Location.escape_json_pointer_token(@keyword)}"
                               else
                                 p.schema_pointer
                               end
@@ -477,8 +477,8 @@ module JsonSchemer
             uri = buri.dup
             uri.fragment = ""
             uri.to_s
-          elsif kw = @keyword
-            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+          elsif !@keyword.empty?
+            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(@keyword))}"
           else
             p.absolute_keyword_location
           end
@@ -853,7 +853,16 @@ module JsonSchemer
         regexp_resolver: regexp_resolver,
         formats: configuration.formats,
         content_encodings: configuration.content_encodings,
-        content_media_types: configuration.content_media_types
+        content_media_types: configuration.content_media_types,
+        insert_property_defaults: configuration.insert_property_defaults,
+        property_default_resolver: configuration.property_default_resolver,
+        vocabulary: configuration.vocabulary,
+        format: configuration.format,
+        keywords: configuration.keywords,
+        output_format: configuration.output_format,
+        access_mode: configuration.access_mode,
+        max_depth: configuration.max_depth,
+        regexp_filter: configuration.regexp_filter
       )
 
       remote_uri = remote.base_uri.dup

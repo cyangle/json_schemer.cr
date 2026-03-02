@@ -378,6 +378,9 @@ schema.valid?(JSON::Any.new("invalid"))  # => false
 # Disable format assertion (annotation-only)
 schema = JsonSchemer.schema(%q({"format": "email"}), format: false)
 schema.valid?(JSON::Any.new("invalid"))  # => true
+
+# Explicitly unset (falls back to global config default)
+schema = JsonSchemer.schema(%q({"format": "email"}), format: nil)
 ```
 
 Supported formats:
@@ -914,6 +917,8 @@ write_schema.valid?(JSON.parse(%q({"password": "secret"})))  # => true
 ## Property Default Resolver
 
 The `property_default_resolver` option allows for conditional injection of default values. This is useful when you only want to insert defaults for specific properties or based on custom logic.
+
+Starting from `0.10.2`, `insert_property_defaults: true` is inherited by subschemas (including those resolved via `$ref`). You can explicitly disable it for a specific subschema by setting it to `false` in that subschema's configuration.
 
 To use it, you must also set `insert_property_defaults: true`.
 
