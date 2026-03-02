@@ -5,10 +5,9 @@ module JsonSchemer
         # AllOf with discriminator support
         class AllOf < Draft202012::Vocab::Applicator::AllOf
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
-            schemas = parsed.as(Array(Schema))
             nested = [] of Result
 
-            schemas.each do |subschema|
+            @schemas.each do |subschema|
               ref_kw = subschema.parsed["$ref"]?
               if ref_kw.is_a?(Draft202012::Vocab::Core::Ref)
                 ref_schema = ref_kw.ref_schema

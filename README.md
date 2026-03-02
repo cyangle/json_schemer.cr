@@ -314,7 +314,7 @@ schema = JsonSchemer.schema(
 
 #### `format`
 
-Controls whether format validation causes validation failures. The library enables format validation by default (`true`). To follow Draft 2020-12 strict annotation-only behavior, set this to `false`.
+Controls whether format validation causes validation failures. The library enables format validation by default (`true`). To follow Draft 2020-12 strict annotation-only behavior, set this to `false`. Passing `nil` explicitly unsets the option, falling back to the global configuration default.
 
 ```crystal
 # Default: format validation is enabled
@@ -512,6 +512,8 @@ write_schema.valid?(JSON.parse(%q({"password": "secret"})))  # => true
 
 Accepts a boolean to enable default value insertion. Default values are inserted into the validated instance.
 
+Starting from `0.10.2`, this setting is inherited by subschemas (including those resolved via `$ref`). You can explicitly disable it for a specific subschema by setting it to `false` in that subschema's configuration.
+
 ```crystal
 schema = JsonSchemer.schema(
   %q({
@@ -608,8 +610,8 @@ schema = JsonSchemer.schema(
 
 ### Server-Side Request Forgery (SSRF) and Local File Inclusion (LFI)
 By default, external `$ref` pointers are disabled and will safely raise an `UnknownRef` error.
-* If you explicitly enable `ref_resolver: "net/http"` or `JsonSchemer::NET_HTTP_REF_RESOLVER`, be aware that malicious schemas could probe internal network services (SSRF).
-* If you load schemas via `Path` or `ref_resolver: "file"` / `JsonSchemer::FILE_URI_REF_RESOLVER`, malicious schemas could attempt to read local files (LFI).
+* If you explicitly enable `ref_resolver: "net/http"` or `JsonSchemer::NET_HTTP_REF_RESOLVER`, be aware that malicious schemas could probe internal network services (SSRF). Note that `NET_HTTP_REF_RESOLVER` follows redirects and does not restrict target IPs.
+* If you load schemas via `Path` or `ref_resolver: "file"` / `JsonSchemer::FILE_URI_REF_RESOLVER`, malicious schemas could attempt to read local files (LFI). Note that `FILE_URI_REF_RESOLVER` does not enforce a root directory constraint and may follow symlinks.
 * **Recommendation:** Only enable network or file resolvers for trusted schemas. If accepting user schemas, stick to the default `DEFAULT_REF_RESOLVER` or use a sandboxed custom resolver.
 
 ## Known Limitations
@@ -623,7 +625,7 @@ Crystal's `JSON.parse` uses `Int64` for integers. Schemas with integers exceedin
 Only **Draft 2020-12** is fully implemented. Cross-draft references (e.g., referencing Draft 2019-09 schemas) are not supported.
 
 ### ECMA-262 Regex Differences
-While ECMA-262 regex patterns are supported via the `regexp_resolver: "ecma"` option, some Unicode semantics differ from PCRE due to Crystal's regex engine being PCRE-based.
+While ECMA-262 regex patterns are supported via the `regexp_resolver: "ecma"` option, some Unicode semantics differ from PCRE due to Crystal's regex engine being PCRE-based. The `0.10.2` release improved compatibility by handling Unicode escapes and ensuring ASCII-only behavior for character class escapes (`\d`, `\w`, `\s`) inside brackets.
 
 ### IDN Hostname Validation
 Some edge cases in internationalized hostname validation may differ due to UTS#46 vs IDNA2008 implementation differences. Specifically:

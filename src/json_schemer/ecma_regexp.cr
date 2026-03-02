@@ -16,6 +16,9 @@ module JsonSchemer
       "\\S" => "[^#{Regex.escape(ECMA_WHITESPACE)}]",
     }
 
+    # Inner content for \s replacement inside character classes (no outer brackets)
+    ECMA_WHITESPACE_INNER = Regex.escape(ECMA_WHITESPACE)
+
     # ECMA-262 Unicode property names to PCRE2 equivalents
     # ECMA-262 uses long names, PCRE2 uses short names
     # See: https://tc39.es/ecma262/#table-unicode-general-category-values
@@ -73,8 +76,33 @@ module JsonSchemer
       # Script names (keep as-is, PCRE2 supports them)
     }
 
-    # Named character classes in ECMA that Crystal/Ruby handles differently
-    UNICODE_ESCAPES = /\\u\{?([0-9A-Fa-f]+)\}?/
+    # Valid ECMA-262 escape characters (after the backslash)
+    # Includes: character class escapes, control escapes, digits for backrefs,
+    # special escapes like \b \B \0, and identity escapes for non-word chars
+    VALID_ECMA_ESCAPES = Set{
+      # Character class escapes
+      'd', 'D', 'w', 'W', 's', 'S',
+      # Control escapes
+      'f', 'n', 'r', 't', 'v',
+      # Word boundary
+      'b', 'B',
+      # Null character
+      '0',
+      # Hex and unicode escapes
+      'x', 'u',
+      # Control character
+      'c',
+      # Backreferences (digits 1-9)
+      '1', '2', '3', '4', '5', '6', '7', '8', '9',
+      # Other valid escapes (for character classes and assertions)
+      'k', 'p', 'P',
+    }
+
+    # Separate patterns for braced and unbraced unicode escapes
+    # Braced: \u{XXXX} or \u{XXXXX} (variable length hex)
+    UNICODE_ESCAPE_BRACED = /\\u\{([0-9A-Fa-f]+)\}/
+    # Unbraced: \uXXXX (exactly 4 hex digits)
+    UNICODE_ESCAPE_UNBRACED = /\\u([0-9A-Fa-f]{4})/
 
     # Regex to find Unicode property escapes
     UNICODE_PROPERTY_PATTERN = /\\[pP]\{([^}]+)\}/
@@ -84,6 +112,11 @@ module JsonSchemer
     ESCAPE_PATTERN = /\\[dDwWsS]/
 
     def self.crystal_equivalent(pattern : String) : String
+      # Step 0: Reject invalid escape sequences
+      if has_invalid_escapes?(pattern)
+        raise InvalidEcmaRegexp.new("Invalid ECMA regexp: contains invalid escape sequence")
+      end
+
       result = pattern
 
       # Step 1: Replace ECMA character class escapes (\d, \w, \s, etc.)
@@ -100,15 +133,26 @@ module JsonSchemer
       # Step 4: Normalize \cX control character escapes (ECMA allows lowercase \ca-\cz)
       result = convert_control_escapes(result)
 
-      # Step 5: Convert unicode escapes \u{XXXX} or \uXXXX
-      result = result.gsub(UNICODE_ESCAPES) do |match|
-        hex = match.match!(UNICODE_ESCAPES)[1]
+      # Step 5: Convert unicode escapes to PCRE2-compatible \x{XXXX} format
+      # (PCRE2 does not support \u — only \x{XXXX})
+
+      # Step 5a: Convert braced form \u{XXXX} or \u{XXXXX}
+      result = result.gsub(UNICODE_ESCAPE_BRACED) do |match|
+        hex = match.match!(UNICODE_ESCAPE_BRACED)[1]
         codepoint = hex.to_i(16)
         if codepoint <= 0xFFFF
-          "\\u#{hex.rjust(4, '0')}"
+          "\\x{#{hex.rjust(4, '0')}}"
         else
           codepoint.chr.to_s
         end
+      rescue ex : ArgumentError | OverflowError
+        match
+      end
+
+      # Step 5b: Convert unbraced form \uXXXX (exactly 4 hex digits)
+      result = result.gsub(UNICODE_ESCAPE_UNBRACED) do |match|
+        hex = match.match!(UNICODE_ESCAPE_UNBRACED)[1]
+        "\\x{#{hex}}"
       rescue ex : ArgumentError | OverflowError
         match
       end
@@ -153,23 +197,18 @@ module JsonSchemer
     # start an escape sequence are NOT yielded — only the escaped character is
     # yielded (with `escaped = true`).
     private def self.walk_pattern(pattern : String, &)
-      i = 0
       char_class_depth = 0
       escape_next = false
 
-      while i < pattern.size
-        char = pattern[i]
-
+      pattern.each_char do |char|
         if escape_next
           yield char, true, char_class_depth > 0
           escape_next = false
-          i += 1
           next
         end
 
         if char == '\\'
           escape_next = true
-          i += 1
           next
         end
 
@@ -180,9 +219,7 @@ module JsonSchemer
         end
 
         yield char, false, char_class_depth > 0
-        i += 1
       end
-
       # Signal trailing backslash (incomplete escape)
       if escape_next
         yield '\\', false, char_class_depth > 0
@@ -213,49 +250,70 @@ module JsonSchemer
     private def self.convert_control_escapes(pattern : String) : String
       result = String::Builder.new
       i = 0
+      escape_next = false
 
       while i < pattern.size
         char = pattern[i]
 
-        if char == '\\' && i + 1 < pattern.size
-          next_char = pattern[i + 1]
-
-          if next_char == 'c' && i + 2 < pattern.size
-            control_char = pattern[i + 2]
-            # ECMA-262: \cX where X is a-z or A-Z
+        if escape_next
+          if char == 'c' && i + 1 < pattern.size
+            control_char = pattern[i + 1]
             if control_char.ascii_letter?
-              # Convert to uppercase for PCRE2 compatibility
-              result << "\\c"
-              result << control_char.upcase
-              i += 3
+              result << "\\c" << control_char.upcase
+              escape_next = false
+              i += 2
               next
             end
           end
-
-          # Not a control escape, copy as-is
-          result << char
+          result << '\\' << char
+          escape_next = false
           i += 1
-        else
-          result << char
-          i += 1
+          next
         end
+
+        if char == '\\'
+          escape_next = true
+          i += 1
+          next
+        end
+
+        result << char
+        i += 1
+      end
+
+      if escape_next
+        result << '\\'
       end
 
       result.to_s
     end
 
-    # Replace character class escapes, being careful about character class context
+    # Replace character class escapes (\d, \w, \s, etc.) with ASCII-only equivalents
+    # Handles both inside and outside [...] character classes
     private def self.replace_escapes_outside_character_classes(pattern : String) : String
       result = String::Builder.new
       walk_pattern(pattern) do |char, escaped, in_char_class|
         if escaped
-          # Only replace \d, \D, \w, \W, \s, \S outside character classes
-          if !in_char_class && "dDwWsS".includes?(char)
-            escape_seq = "\\#{char}"
-            if replacement = ESCAPES[escape_seq]?
-              result << replacement
+          if "dDwWsS".includes?(char)
+            if in_char_class
+              # Inside [...], use bracket-free equivalents for positive escapes
+              # to ensure ASCII-only behavior (PCRE2's \d etc. are Unicode-aware)
+              case char
+              when 'd' then result << "0-9"
+              when 'w' then result << "A-Za-z0-9_"
+              when 's' then result << ECMA_WHITESPACE_INNER
+              else
+                # \D, \W, \S inside char class: leave as-is
+                # (negated forms can't be cleanly expanded inside bracket unions)
+                result << '\\' << char
+              end
             else
-              result << escape_seq
+              escape_seq = "\\#{char}"
+              if replacement = ESCAPES[escape_seq]?
+                result << replacement
+              else
+                result << escape_seq
+              end
             end
           else
             result << '\\'
@@ -267,28 +325,6 @@ module JsonSchemer
       end
       result.to_s
     end
-
-    # Valid ECMA-262 escape characters (after the backslash)
-    # Includes: character class escapes, control escapes, digits for backrefs,
-    # special escapes like \b \B \0, and identity escapes for non-word chars
-    VALID_ECMA_ESCAPES = Set{
-      # Character class escapes
-      'd', 'D', 'w', 'W', 's', 'S',
-      # Control escapes
-      'f', 'n', 'r', 't', 'v',
-      # Word boundary
-      'b', 'B',
-      # Null character
-      '0',
-      # Hex and unicode escapes
-      'x', 'u',
-      # Control character
-      'c',
-      # Backreferences (digits 1-9)
-      '1', '2', '3', '4', '5', '6', '7', '8', '9',
-      # Other valid escapes (for character classes and assertions)
-      'k', 'p', 'P',
-    }
 
     # Check if pattern is valid ECMA-262 regex
     def self.valid?(pattern : String) : Bool
@@ -308,7 +344,7 @@ module JsonSchemer
       walk_pattern(pattern) do |char, escaped, in_char_class|
         # Inside character class, most escapes are allowed as identity escapes.
         # Outside: \a is specifically NOT a valid ECMA-262 escape.
-        if escaped && !in_char_class && char == 'a'
+        if escaped && !in_char_class && char.ascii_letter? && !VALID_ECMA_ESCAPES.includes?(char)
           return true
         end
       end
