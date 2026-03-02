@@ -98,9 +98,7 @@ describe "$ref Resolution" do
 
       error["data"].as_i64.should eq(1)
       error["data_pointer"].as_s.should eq("/a/x")
-      # Note: Crystal implementation reports the schema pointer with trailing slash for some reason
-      # error["schema_pointer"].as_s.should eq("/allOf/0/if")
-      error["schema_pointer"].as_s.should eq("/allOf/0/if/")
+      error["schema_pointer"].as_s.should eq("/allOf/0/if")
       error["type"].as_s.should eq("string")
     end
 

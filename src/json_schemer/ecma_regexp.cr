@@ -197,23 +197,18 @@ module JsonSchemer
     # start an escape sequence are NOT yielded — only the escaped character is
     # yielded (with `escaped = true`).
     private def self.walk_pattern(pattern : String, &)
-      i = 0
       char_class_depth = 0
       escape_next = false
 
-      while i < pattern.size
-        char = pattern[i]
-
+      pattern.each_char do |char|
         if escape_next
           yield char, true, char_class_depth > 0
           escape_next = false
-          i += 1
           next
         end
 
         if char == '\\'
           escape_next = true
-          i += 1
           next
         end
 
@@ -224,9 +219,7 @@ module JsonSchemer
         end
 
         yield char, false, char_class_depth > 0
-        i += 1
       end
-
       # Signal trailing backslash (incomplete escape)
       if escape_next
         yield '\\', false, char_class_depth > 0

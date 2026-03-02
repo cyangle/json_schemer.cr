@@ -455,8 +455,8 @@ module JsonSchemer
     def schema_pointer : String
       @schema_pointer || @lock.synchronize do
         @schema_pointer ||= if p = @parent
-                              if kw = @keyword
-                                "#{p.schema_pointer}/#{Location.escape_json_pointer_token(kw)}"
+                              if !@keyword.empty?
+                                "#{p.schema_pointer}/#{Location.escape_json_pointer_token(@keyword)}"
                               else
                                 p.schema_pointer
                               end
@@ -477,8 +477,8 @@ module JsonSchemer
             uri = buri.dup
             uri.fragment = ""
             uri.to_s
-          elsif kw = @keyword
-            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(kw))}"
+          elsif !@keyword.empty?
+            "#{p.absolute_keyword_location}/#{fragment_encode(Location.escape_json_pointer_token(@keyword))}"
           else
             p.absolute_keyword_location
           end
@@ -855,7 +855,14 @@ module JsonSchemer
         content_encodings: configuration.content_encodings,
         content_media_types: configuration.content_media_types,
         insert_property_defaults: configuration.insert_property_defaults,
-        property_default_resolver: configuration.property_default_resolver
+        property_default_resolver: configuration.property_default_resolver,
+        vocabulary: configuration.vocabulary,
+        format: configuration.format,
+        keywords: configuration.keywords,
+        output_format: configuration.output_format,
+        access_mode: configuration.access_mode,
+        max_depth: configuration.max_depth,
+        regexp_filter: configuration.regexp_filter
       )
 
       remote_uri = remote.base_uri.dup
