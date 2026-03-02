@@ -190,6 +190,7 @@ Available error classes:
 - `RegexMatchLimitExceeded` - Raised when a regex match exceeds the backtracking limit (ReDoS protection).
 - `RegexFilterViolation` - Raised when a regex pattern is disallowed by configuration.
 - `JsonSchemer::Errors.pretty(error_hash)` - Helper for formatting error messages.
+- Custom format validators should raise specific exceptions. General exceptions raised within custom format validators are no longer caught by the library and will propagate up to the caller.
 
 ### Keyword Implementation Pattern
 All JSON Schema keywords inherit from `Keyword`:
@@ -204,6 +205,7 @@ class MyKeyword < Keyword
     value  # Default: return raw value
   end
 
+  # NOTE: Keyword must be listed in JsonSchemer::Schema::ADJACENT_CONSUMERS if it uses context.adjacent_results
   # Override validate to perform validation
   def validate(
     instance : JSON::Any,
@@ -382,7 +384,7 @@ Some `idn-hostname.json` and `hostname.json` tests are skipped due to UTS#46 vs 
 ICU/simpleidn uses UTS#46 which maps/allows some characters that strict IDNA2008 disallows.
 
 ### Remote Schema Resolution
-The test suite uses a custom `CachedRefResolver` that maps remote refs to local files:
+The test suite uses a custom `CachedResolver` that maps remote refs to local files:
 - `http://localhost:1234/foo.json` → `JSON-Schema-Test-Suite/remotes/foo.json`
 
 ### Updating the Test Suite
@@ -404,6 +406,9 @@ git submodule update --remote JSON-Schema-Test-Suite
 9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.
 10. **Validation Depth Security**: `max_depth` restricts recursion depth (default 50) to prevent `MaximumDepthExceeded` stack overflows from malicious JSON.
 11. **Immutability**: Validation results and output units are carefully protected to ensure the original schema hash is not accidentally mutated.
+12. **Configuration Inheritance**: Configuration options (like `insert_property_defaults`) explicitly set on a schema are inherited and propagated to subschemas via `$ref`.
+13. **Configuration Override**: You can explicitly unset inherited configuration options by passing `nil` (e.g., `format: nil` will fall back to the global default, while `format: false` disables it).
+14. **Security Notes**: `NET_HTTP_REF_RESOLVER` is intended only for trusted schemas as it does not restrict redirect targets (potential SSRF). `FILE_URI_REF_RESOLVER` does not prevent symlinks from resolving outside the original directory.
 
 ## Design Tradeoffs & Architecture Decisions
 
@@ -416,3 +421,4 @@ git submodule update --remote JSON-Schema-Test-Suite
 | **BigDecimal for numeric constraints** | Slight performance overhead vs Float64, but preserves precision for integers > 2^53-1 (Int64::MAX cannot be precisely represented as Float64). |
 | **Resources: unsynchronized reads with synchronized writes** | Writes during construction only; reads during validation. Safe initialize-then-read. @mutex on []= is defense-in-depth. |
 | **Location::Node#join double-checked lock** | Schema nodes built during construction with bounded key set, read-only during validation. Instance nodes are per-validate(), never shared. `||=` inside lock handles races. |
+| **Generic CachedResolver(K, V)** | Unified cache implementation for $ref and Regex patterns using thread-safe LRU cache. Replaced separate `CachedRefResolver` and `CachedRegexpResolver` classes to reduce code duplication while maintaining fiber-safe resolution. |
