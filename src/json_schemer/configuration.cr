@@ -56,7 +56,7 @@ module JsonSchemer
     property insert_property_defaults : Bool
 
     # Custom keywords.
-    property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))
+    property custom_keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))
 
     # Maximum recursion depth during validation to prevent stack overflows (Security limit).
     # Default is 50.
@@ -97,7 +97,7 @@ module JsonSchemer
       @format : Bool = true,
       @formats : Hash(String, Format::FormatValidator) = {} of String => Format::FormatValidator,
       @insert_property_defaults : Bool = false,
-      @keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)),
+      @custom_keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)),
       @max_depth : Int32 = 50,
       @meta_schema : String | Schema = "https://json-schema.org/draft/2020-12/schema",
       @output_format : String = "classic",
