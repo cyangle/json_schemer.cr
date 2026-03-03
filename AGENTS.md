@@ -403,7 +403,7 @@ git submodule update --remote JSON-Schema-Test-Suite
 6. **Format validation default**: Enabled by default (`true`). Use `format: false` for strict annotation-only behavior.
 7. **ECMA regexp**: Use `regexp_resolver: "ecma"` for JavaScript-compatible patterns
 8. **OpenAPI 3.1/3.2 support**: Use `JsonSchemer.openapi(document)` for OpenAPI document validation
-9. **Custom Keyword Validators**: Use `keywords` option or global configuration to add custom validation logic.
+9. **Custom Keyword Validators**: Use `custom_keywords` option or global configuration to add custom validation logic.
 10. **Validation Depth Security**: `max_depth` restricts recursion depth (default 50) to prevent `MaximumDepthExceeded` stack overflows from malicious JSON.
 11. **Immutability**: Validation results and output units are carefully protected to ensure the original schema hash is not accidentally mutated.
 12. **Configuration Inheritance**: Configuration options (like `insert_property_defaults`) explicitly set on a schema are inherited and propagated to subschemas via `$ref`.

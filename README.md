@@ -171,7 +171,7 @@ schema = JsonSchemer.schema(..., formats: {"hostname" => combined})
 
 For complex custom validation logic that requires parsing schema values (like checking bounds or configuration options), you can define a custom keyword class inheriting from `JsonSchemer::Keyword`.
 
-This is more powerful than the simple proc-based `keywords` option as it allows you to pre-process the schema value during initialization.
+This is more powerful than the simple proc-based `custom_keywords` option as it allows you to pre-process the schema value during initialization.
 
 ```crystal
 class MoneyKeyword < JsonSchemer::Keyword
@@ -245,10 +245,10 @@ schema.validate(data, context: context)
 
 > [!WARNING]
 > **Sequential Usage Only:** The `Context` object is **NOT thread-safe**. Each context should only be used by a single fiber/thread at a time.
-> 
+>
 > - ✅ **Correct:** Reuse a context in a single loop or sequential processing
 > - ❌ **Incorrect:** Share a context across concurrent fibers or threads
-> 
+>
 > For concurrent validation, create a separate `Context` per fiber/thread, or use a thread-local context pool.
 
 See [USAGE.md](USAGE.md#high-throughput-validation) for more details.
@@ -267,7 +267,7 @@ This section provides a complete reference for all configuration options availab
 | `formats` | `Hash(String, FormatValidator)` | `{}` | Custom format validators |
 | `content_encodings` | `Hash(String, ContentEncodingValidator)` | `{}` | Custom content encoding validators |
 | `content_media_types` | `Hash(String, ContentMediaTypeValidator)` | `{}` | Custom content media type validators |
-| `keywords` | `Hash(String, Proc)` | `{}` | Custom keyword validators |
+| `custom_keywords` | `Hash(String, Proc)` | `{}` | Custom keyword validators |
 | `ref_resolver` | `Proc(URI, JSONHash?) \| String` | Raises `UnknownRef` | Resolver for external `$ref` URIs |
 | `regexp_resolver` | `Proc(String, Regex?) \| String` | `"ruby"` | Regex pattern resolver (`"ruby"` or `"ecma"`) |
 | `output_format` | `String` | `"classic"` | Output format: `"flag"`, `"basic"`, `"classic"`, `"detailed"`, or `"verbose"` |
@@ -530,7 +530,7 @@ schema.validate(data)
 data.as_h["status"].as_s  # => "active"
 ```
 
-#### `keywords`
+#### `custom_keywords`
 
 Register custom keyword validators. Each validator receives the instance, schema value, and JSON pointer, returning `true` if valid or an array of error strings if invalid.
 
@@ -540,7 +540,7 @@ schema = JsonSchemer.schema(
     "type": "string",
     "x-must-be-uppercase": true
   }),
-  keywords: {
+  custom_keywords: {
     "x-must-be-uppercase" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       if str = instance.as_s?
         if str == str.upcase

@@ -418,7 +418,7 @@ schema.valid?(JSON::Any.new("invalid"))  # => false
 
 ## Custom Keywords
 
-You can add custom validation keywords using the `keywords` option. Each keyword validator receives the instance value, schema value, and JSON pointer, returning either `true` for valid or an array of error strings for invalid.
+You can add custom validation keywords using the `custom_keywords` option. Each keyword validator receives the instance value, schema value, and JSON pointer, returning either `true` for valid or an array of error strings for invalid.
 
 ```crystal
 schema = JsonSchemer.schema(
@@ -431,7 +431,7 @@ schema = JsonSchemer.schema(
       }
     }
   }),
-  keywords: {
+  custom_keywords: {
     "x-no-spaces" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       if str = instance.as_s?
         if str.includes?(' ')
@@ -499,7 +499,7 @@ schema = JsonSchemer.schema(
       }
     }
   }),
-  keywords: { "x-money" => money_validator }
+  custom_keywords: { "x-money" => money_validator }
 )
 
 schema.valid?(JSON.parse(%q({"price": "19.95"})))  # => true
@@ -515,7 +515,7 @@ schema = JsonSchemer.schema(
     "x-starts-with": "prefix_",
     "x-ends-with": "_suffix"
   }),
-  keywords: {
+  custom_keywords: {
     "x-starts-with" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       prefix = schema.as_s
       if str = instance.as_s?
@@ -549,7 +549,7 @@ schema = JsonSchemer.schema(
   %q({
     "x-range": {"min": 0, "max": 100}
   }),
-  keywords: {
+  custom_keywords: {
     "x-range" => ->(instance : JSON::Any, schema : JSON::Any, pointer : String, keyword : JsonSchemer::Keyword) {
       min = schema.as_h["min"].as_i
       max = schema.as_h["max"].as_i
@@ -1012,7 +1012,7 @@ test_cases.each do |data|
   json_data = JSON.parse(data.to_json)
   context.reset(json_data)
   result = schema.validate(json_data, context: context)
-  
+
   if result["valid"].as_bool
     puts "Valid: #{data}"
   else
@@ -1050,7 +1050,7 @@ For concurrent validation scenarios, use one of these patterns:
 # Create a thread-local context
 class ValidationContext
   @@context = {} of UInt64 => JsonSchemer::Schema::Context
-  
+
   def self.get : JsonSchemer::Schema::Context
     fiber_id = Fiber.current.object_id
     @@context[fiber_id] ||= JsonSchemer::Schema::Context.new(JSON::Any.new(nil))
@@ -1078,11 +1078,11 @@ class ContextPool
     @pool = Channel(JsonSchemer::Schema::Context).new(@capacity)
     @capacity.times { @pool.send(JsonSchemer::Schema::Context.new(JSON::Any.new(nil))) }
   end
-  
+
   def checkout : JsonSchemer::Schema::Context
     @pool.receive
   end
-  
+
   def checkin(context : JsonSchemer::Schema::Context)
     @pool.send(context)
   end
