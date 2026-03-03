@@ -451,22 +451,23 @@ describe "Configuration Options" do
     end
   end
 
-  describe "Configuration#dup_with" do
-    it "correctly handles boolean false overrides" do
-      config = JsonSchemer::Configuration.new(format: true, insert_property_defaults: true)
-
-      # Should override to false
-      new_config = config.dup_with(format: false, insert_property_defaults: false)
-      new_config.format.should be_false
-      new_config.insert_property_defaults.should be_false
-
-      # Should keep true when not provided
-      new_config2 = config.dup_with(access_mode: "read")
-      new_config2.format.should be_true
-      new_config2.insert_property_defaults.should be_true
+  describe "Configuration.new field overrides" do
+    it "correctly handles boolean false values" do
+      config = JsonSchemer::Configuration.new(format: false, insert_property_defaults: false)
+      config.format.should be_false
+      config.insert_property_defaults.should be_false
     end
 
-    it "preserves all values when called with no arguments" do
+    it "uses default values when not specified" do
+      config = JsonSchemer::Configuration.new
+      config.format.should be_true
+      config.insert_property_defaults.should be_false
+      config.output_format.should eq("classic")
+      config.access_mode.should be_nil
+      config.max_depth.should eq(50)
+    end
+
+    it "preserves all explicit values" do
       config = JsonSchemer::Configuration.new(
         format: true,
         insert_property_defaults: true,
@@ -475,124 +476,117 @@ describe "Configuration Options" do
         max_depth: 100,
       )
 
-      dup = config.dup_with
-      dup.format.should be_true
-      dup.insert_property_defaults.should be_true
-      dup.output_format.should eq("basic")
-      dup.access_mode.should eq("write")
-      dup.max_depth.should eq(100)
+      config.format.should be_true
+      config.insert_property_defaults.should be_true
+      config.output_format.should eq("basic")
+      config.access_mode.should eq("write")
+      config.max_depth.should eq(100)
     end
 
-    it "overrides access_mode with a new value" do
-      config = JsonSchemer::Configuration.new(access_mode: "read")
-      new_config = config.dup_with(access_mode: "write")
-      new_config.access_mode.should eq("write")
+    it "sets access_mode to a specific value" do
+      config = JsonSchemer::Configuration.new(access_mode: "write")
+      config.access_mode.should eq("write")
     end
 
-    it "explicitly overrides access_mode to nil" do
-      config = JsonSchemer::Configuration.new(access_mode: "read")
-      new_config = config.dup_with(access_mode: nil)
-      new_config.access_mode.should be_nil
+    it "sets access_mode to nil" do
+      config = JsonSchemer::Configuration.new(access_mode: nil)
+      config.access_mode.should be_nil
     end
 
-    it "explicitly overrides vocabulary to nil" do
+    it "sets vocabulary to nil" do
+      config = JsonSchemer::Configuration.new(vocabulary: nil)
+      config.vocabulary.should be_nil
+    end
+
+    it "sets vocabulary to a specific value" do
       vocab = {"https://example.com/vocab" => true}
       config = JsonSchemer::Configuration.new(vocabulary: vocab)
       config.vocabulary.should eq(vocab)
-
-      new_config = config.dup_with(vocabulary: nil)
-      new_config.vocabulary.should be_nil
     end
 
-    it "explicitly overrides property_default_resolver to nil" do
+    it "sets property_default_resolver to nil" do
+      config = JsonSchemer::Configuration.new(property_default_resolver: nil)
+      config.property_default_resolver.should be_nil
+    end
+
+    it "sets property_default_resolver to a value" do
       resolver = ->(value : JSON::Any, property : String, results : Array(Tuple(JsonSchemer::Result, Bool))) {
         true
       }
       config = JsonSchemer::Configuration.new(property_default_resolver: resolver)
       config.property_default_resolver.should_not be_nil
-
-      new_config = config.dup_with(property_default_resolver: nil)
-      new_config.property_default_resolver.should be_nil
     end
 
-    it "explicitly overrides regexp_filter to nil" do
-      filter = ->(pattern : String) { true }
+    it "sets regexp_filter to nil" do
+      config = JsonSchemer::Configuration.new(regexp_filter: nil)
+      config.regexp_filter.should be_nil
+    end
+
+    it "sets regexp_filter to a value" do
+      filter = ->(pattern : String) { !pattern.includes?("dangerous") }
       config = JsonSchemer::Configuration.new(regexp_filter: filter)
       config.regexp_filter.should_not be_nil
-
-      new_config = config.dup_with(regexp_filter: nil)
-      new_config.regexp_filter.should be_nil
-    end
-
-    it "overrides regexp_filter with a new value" do
-      config = JsonSchemer::Configuration.new
-      config.regexp_filter.should be_nil
-
-      filter = ->(pattern : String) { !pattern.includes?("dangerous") }
-      new_config = config.dup_with(regexp_filter: filter)
-      new_config.regexp_filter.should_not be_nil
-      new_config.regexp_filter.not_nil!.call("safe").should be_true
-      new_config.regexp_filter.not_nil!.call("dangerous").should be_false
+      config.regexp_filter.not_nil!.call("safe").should be_true
+      config.regexp_filter.not_nil!.call("dangerous").should be_false
     end
 
     it "overrides output_format" do
-      config = JsonSchemer::Configuration.new(output_format: "classic")
-      new_config = config.dup_with(output_format: "basic")
-      new_config.output_format.should eq("basic")
+      config = JsonSchemer::Configuration.new(output_format: "basic")
+      config.output_format.should eq("basic")
     end
 
     it "overrides max_depth" do
-      config = JsonSchemer::Configuration.new(max_depth: 50)
-      new_config = config.dup_with(max_depth: 10)
-      new_config.max_depth.should eq(10)
+      config = JsonSchemer::Configuration.new(max_depth: 10)
+      config.max_depth.should eq(10)
     end
 
     it "overrides base_uri" do
-      config = JsonSchemer::Configuration.new
       new_uri = URI.parse("https://example.com/schema")
-      new_config = config.dup_with(base_uri: new_uri)
-      new_config.base_uri.should eq(new_uri)
+      config = JsonSchemer::Configuration.new(base_uri: new_uri)
+      config.base_uri.should eq(new_uri)
     end
 
     it "overrides meta_schema" do
-      config = JsonSchemer::Configuration.new
-      new_config = config.dup_with(meta_schema: "https://json-schema.org/draft/2019-09/schema")
-      new_config.meta_schema.should eq("https://json-schema.org/draft/2019-09/schema")
+      config = JsonSchemer::Configuration.new(meta_schema: "https://json-schema.org/draft/2019-09/schema")
+      config.meta_schema.should eq("https://json-schema.org/draft/2019-09/schema")
     end
 
     it "overrides ref_resolver" do
-      config = JsonSchemer::Configuration.new
-      new_config = config.dup_with(ref_resolver: "net/http")
-      new_config.ref_resolver.should eq("net/http")
+      config = JsonSchemer::Configuration.new(ref_resolver: "net/http")
+      config.ref_resolver.should eq("net/http")
     end
 
-    it "does not mutate the original configuration" do
-      config = JsonSchemer::Configuration.new(
+    it "creates independent instances" do
+      config1 = JsonSchemer::Configuration.new(
         format: true,
         output_format: "classic",
         access_mode: "read",
         max_depth: 50,
       )
 
-      config.dup_with(
+      config2 = JsonSchemer::Configuration.new(
         format: false,
         output_format: "basic",
         access_mode: nil,
         max_depth: 10,
       )
 
-      # Original should be unchanged
-      config.format.should be_true
-      config.output_format.should eq("classic")
-      config.access_mode.should eq("read")
-      config.max_depth.should eq(50)
+      # Both should be independent
+      config1.format.should be_true
+      config1.output_format.should eq("classic")
+      config1.access_mode.should eq("read")
+      config1.max_depth.should eq(50)
+
+      config2.format.should be_false
+      config2.output_format.should eq("basic")
+      config2.access_mode.should be_nil
+      config2.max_depth.should eq(10)
     end
 
-    it "can override multiple fields at once" do
-      config = JsonSchemer::Configuration.new
+    it "can set multiple fields at once" do
       filter = ->(pattern : String) { true }
 
-      new_config = config.dup_with(
+      config = JsonSchemer::Configuration.new(
         format: false,
         insert_property_defaults: true,
         output_format: "flag",
@@ -601,12 +595,12 @@ describe "Configuration Options" do
         regexp_filter: filter,
       )
 
-      new_config.format.should be_false
-      new_config.insert_property_defaults.should be_true
-      new_config.output_format.should eq("flag")
-      new_config.access_mode.should eq("write")
-      new_config.max_depth.should eq(25)
-      new_config.regexp_filter.should eq(filter)
+      config.format.should be_false
+      config.insert_property_defaults.should be_true
+      config.output_format.should eq("flag")
+      config.access_mode.should eq("write")
+      config.max_depth.should eq(25)
+      config.regexp_filter.should eq(filter)
     end
   end
 end
