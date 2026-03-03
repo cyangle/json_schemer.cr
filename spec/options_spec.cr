@@ -302,6 +302,106 @@ describe "Configuration Options" do
         schema.valid?(JSON::Any.new("test")).should be_true
       end
     end
+
+    describe "custom_keywords inheritance via $ref" do
+      it "propagates custom_keywords to subschemas via external $ref" do
+        called_for_ref = false
+        custom_keywords = {
+          "x-check-value" => ->(instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
+            called_for_ref = true
+            if instance.as_s? == "valid"
+              true.as(Bool | Array(String))
+            else
+              ["must be 'valid'"].as(Bool | Array(String))
+            end
+          },
+        }
+
+        ref_schema = {
+          "type"          => JSON::Any.new("string"),
+          "x-check-value" => JSON::Any.new(true),
+        } of String => JSON::Any
+
+        schema = JsonSchemer.schema(
+          JSON.parse(%q({
+            "type": "object",
+            "properties": {
+              "value": {"$ref": "http://example.com/schema.json"}
+            }
+          })).as_h,
+          custom_keywords: custom_keywords,
+          ref_resolver: ->(uri : URI) { uri.to_s == "http://example.com/schema.json" ? ref_schema : nil }
+        )
+
+        # Custom keyword should be inherited and work in the $ref'd schema
+        schema.valid?(JSON.parse(%q({"value": "valid"}))).should be_true
+        called_for_ref.should be_true
+
+        called_for_ref = false
+        schema.valid?(JSON.parse(%q({"value": "invalid"}))).should be_false
+        called_for_ref.should be_true
+      end
+
+      it "propagates custom_keywords to subschemas via local $defs $ref" do
+        called_for_def = false
+        custom_keywords = {
+          "x-prefix" => ->(instance : JSON::Any, schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
+            called_for_def = true
+            if (str = instance.as_s?) && (prefix = schema.as_s?)
+              str.starts_with?(prefix).as(Bool | Array(String))
+            else
+              true.as(Bool | Array(String))
+            end
+          },
+        }
+
+        schema = JsonSchemer.schema(
+          JSON.parse(%q({
+            "$defs": {
+              "nameSchema": {
+                "type": "string",
+                "x-prefix": "test_"
+              }
+            },
+            "type": "object",
+            "properties": {
+              "name": {"$ref": "#/$defs/nameSchema"}
+            }
+          })).as_h,
+          custom_keywords: custom_keywords
+        )
+
+        # Custom keyword should be inherited and work in the $defs schema
+        schema.valid?(JSON.parse(%q({"name": "test_value"}))).should be_true
+        called_for_def.should be_true
+
+        called_for_def = false
+        schema.valid?(JSON.parse(%q({"name": "invalid"}))).should be_false
+        called_for_def.should be_true
+      end
+
+      it "does not apply custom_keywords when not configured on parent schema" do
+        # Schema with custom keyword but no custom_keywords configured
+        schema = JsonSchemer.schema(
+          JSON.parse(%q({
+            "$defs": {
+              "itemSchema": {
+                "type": "string",
+                "x-unknown-keyword": true
+              }
+            },
+            "type": "object",
+            "properties": {
+              "item": {"$ref": "#/$defs/itemSchema"}
+            }
+          })).as_h
+          # Note: no custom_keywords provided
+        )
+
+        # Unknown keywords should be ignored (annotation-only) without custom validator
+        schema.valid?(JSON.parse(%q({"item": "any value"}))).should be_true
+      end
+    end
   end
 
   describe "property_default_resolver option" do
