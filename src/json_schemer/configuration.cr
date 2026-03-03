@@ -24,16 +24,18 @@ module JsonSchemer
   # )
   # ```
   class Configuration
+    # Access mode ("read" or "write") for readOnly/writeOnly validation.
+    property access_mode : String?
+
     # Base URI for resolving relative references.
     # Default is a generated URI `json-schemer://schema`.
     property base_uri : URI
 
-    # The meta-schema used for validating the schema itself.
-    # Default is `https://json-schema.org/draft/2020-12/schema`.
-    property meta_schema : String | Schema
+    # Custom content encoding validators.
+    property content_encodings : Hash(String, Content::ContentEncodingValidator)
 
-    # Configuration for standard vocabularies.
-    property vocabulary : Hash(String, Bool)?
+    # Custom content media type validators.
+    property content_media_types : Hash(String, Content::ContentMediaTypeValidator)
 
     # Enables format validation assertions (default: true).
     # Note: The JSON Schema spec makes format annotation-only by default, but this option
@@ -50,17 +52,23 @@ module JsonSchemer
     # ```
     property formats : Hash(String, Format::FormatValidator)
 
-    # Custom content encoding validators.
-    property content_encodings : Hash(String, Content::ContentEncodingValidator)
-
-    # Custom content media type validators.
-    property content_media_types : Hash(String, Content::ContentMediaTypeValidator)
+    # Whether to insert default values (mutates the instance).
+    property insert_property_defaults : Bool
 
     # Custom keywords.
     property keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))
 
-    # Whether to insert default values (mutates the instance).
-    property insert_property_defaults : Bool
+    # Maximum recursion depth during validation to prevent stack overflows (Security limit).
+    # Default is 50.
+    property max_depth : Int32 = 50
+
+    # The meta-schema used for validating the schema itself.
+    # Default is `https://json-schema.org/draft/2020-12/schema`.
+    property meta_schema : String | Schema
+
+    # Output format ("flag", "basic", "classic").
+    # Default is "classic".
+    property output_format : String
 
     # Resolver for property defaults.
     property property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)?
@@ -69,43 +77,35 @@ module JsonSchemer
     # Can be a Proc or a String ("net/http").
     property ref_resolver : Proc(URI, JSONHash?) | String
 
-    # Resolver for regexp patterns ("ruby" or "ecma").
-    # Default is "ruby".
-    property regexp_resolver : Proc(String, Regex?) | String
-
-    # Output format ("flag", "basic", "classic").
-    # Default is "classic".
-    property output_format : String
-
-    # Access mode ("read" or "write") for readOnly/writeOnly validation.
-    property access_mode : String?
-
-    # Maximum recursion depth during validation to prevent stack overflows (Security limit).
-    # Default is 50.
-    property max_depth : Int32 = 50
-
     # Optional custom filter for regular expression patterns.
     # Takes the pattern string and returns true if it is allowed.
     property regexp_filter : Proc(String, Bool)?
 
+    # Resolver for regexp patterns ("ruby" or "ecma").
+    # Default is "ruby".
+    property regexp_resolver : Proc(String, Regex?) | String
+
+    # Configuration for standard vocabularies.
+    property vocabulary : Hash(String, Bool)?
+
     # Initializes a new Configuration instance with default values.
     def initialize(
+      @access_mode : String? = nil,
       @base_uri : URI = URI.parse("json-schemer://schema"),
-      @meta_schema : String | Schema = "https://json-schema.org/draft/2020-12/schema",
-      @vocabulary : Hash(String, Bool)? = nil,
-      @format : Bool = true,
-      @formats : Hash(String, Format::FormatValidator) = {} of String => Format::FormatValidator,
       @content_encodings : Hash(String, Content::ContentEncodingValidator) = {} of String => Content::ContentEncodingValidator,
       @content_media_types : Hash(String, Content::ContentMediaTypeValidator) = {} of String => Content::ContentMediaTypeValidator,
-      @keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)),
+      @format : Bool = true,
+      @formats : Hash(String, Format::FormatValidator) = {} of String => Format::FormatValidator,
       @insert_property_defaults : Bool = false,
+      @keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String))) = {} of String => Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)),
+      @max_depth : Int32 = 50,
+      @meta_schema : String | Schema = "https://json-schema.org/draft/2020-12/schema",
+      @output_format : String = "classic",
       @property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       @ref_resolver : Proc(URI, JSONHash?) | String = DEFAULT_REF_RESOLVER,
-      @regexp_resolver : Proc(String, Regex?) | String = "ruby",
-      @output_format : String = "classic",
-      @access_mode : String? = nil,
-      @max_depth : Int32 = 50,
       @regexp_filter : Proc(String, Bool)? = nil,
+      @regexp_resolver : Proc(String, Regex?) | String = "ruby",
+      @vocabulary : Hash(String, Bool)? = nil,
     )
       valid_output_formats = {"flag", "basic", "classic", "detailed", "verbose"}
       unless valid_output_formats.includes?(@output_format)
