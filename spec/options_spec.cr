@@ -14,7 +14,7 @@ describe "Configuration Options" do
 
       schema = JsonSchemer.schema(
         %q({"type": "string", "x-custom": true}),
-        keywords: custom_keywords
+        custom_keywords: custom_keywords
       )
 
       schema.should be_a(JsonSchemer::Schema)
@@ -32,7 +32,7 @@ describe "Configuration Options" do
 
       schema = JsonSchemer.schema(
         %q({"x-starts-with": "prefix", "x-ends-with": "suffix"}),
-        keywords: custom_keywords
+        custom_keywords: custom_keywords
       )
 
       schema.should be_a(JsonSchemer::Schema)
@@ -47,10 +47,10 @@ describe "Configuration Options" do
 
       schema = JsonSchemer.schema(
         %q({"type": "string"}),
-        keywords: custom_keywords
+        custom_keywords: custom_keywords
       )
 
-      schema.configuration.keywords.has_key?("x-test").should be_true
+      schema.configuration.custom_keywords.has_key?("x-test").should be_true
     end
 
     it "validates normally when custom keywords option is provided" do
@@ -62,7 +62,7 @@ describe "Configuration Options" do
 
       schema = JsonSchemer.schema(
         %q({"type": "string", "x-custom": true}),
-        keywords: custom_keywords
+        custom_keywords: custom_keywords
       )
 
       # Standard validation still works
@@ -83,7 +83,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-always-valid": true}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("test")).should be_true
@@ -103,7 +103,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-must-be-hello": true}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("hello")).should be_true
@@ -121,7 +121,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-capture": true}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("test-value"))
@@ -139,7 +139,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-capture-schema": {"min": 5, "max": 10}}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("test"))
@@ -159,7 +159,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-capture-pointer": true}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("test"))
@@ -184,7 +184,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"type": "string", "x-starts-with": "hello_"}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("hello_world")).should be_true
@@ -222,7 +222,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-min-length": 3, "x-max-length": 10}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("hello")).should be_true        # 5 chars, valid
@@ -247,7 +247,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-must-be-even": true}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         result = schema.validate(JSON::Any.new(3_i64), output_format: "classic")
@@ -280,7 +280,7 @@ describe "Configuration Options" do
               "code": {"type": "string", "x-uppercase": true}
             }
           }),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON.parse(%q({"code": "ABC"}))).should be_true
@@ -296,7 +296,7 @@ describe "Configuration Options" do
 
         schema = JsonSchemer.schema(
           %q({"x-empty-errors": true}),
-          keywords: custom_keywords
+          custom_keywords: custom_keywords
         )
 
         schema.valid?(JSON::Any.new("test")).should be_true
@@ -433,20 +433,20 @@ describe "Configuration Options" do
   describe "global configuration" do
     it "accepts keywords in global configuration" do
       # Store original to restore later
-      original_keywords = JsonSchemer.configuration.keywords.dup
+      original_keywords = JsonSchemer.configuration.custom_keywords.dup
 
       begin
         JsonSchemer.configure do |config|
-          config.keywords["x-global"] = ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
+          config.custom_keywords["x-global"] = ->(_instance : JSON::Any, _schema : JSON::Any, _pointer : String, _keyword : JsonSchemer::Keyword) {
             true.as(Bool | Array(String))
           }
         end
 
-        JsonSchemer.configuration.keywords.has_key?("x-global").should be_true
+        JsonSchemer.configuration.custom_keywords.has_key?("x-global").should be_true
       ensure
         # Restore original
-        JsonSchemer.configuration.keywords.clear
-        original_keywords.each { |k, v| JsonSchemer.configuration.keywords[k] = v }
+        JsonSchemer.configuration.custom_keywords.clear
+        original_keywords.each { |k, v| JsonSchemer.configuration.custom_keywords[k] = v }
       end
     end
   end

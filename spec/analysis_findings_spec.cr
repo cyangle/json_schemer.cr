@@ -33,7 +33,7 @@ describe "Analysis Report Findings" do
         },
       }
 
-      openapi = JsonSchemer.openapi(document, keywords: keywords)
+      openapi = JsonSchemer.openapi(document, custom_keywords: keywords)
       user_schema = openapi.schema("User")
       user_schema.valid?(JSON.parse(%q({"name": "test"})))
       custom_called.should be_true

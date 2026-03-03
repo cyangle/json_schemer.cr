@@ -257,7 +257,7 @@ module JsonSchemer
 
           def validate(instance : JSON::Any, instance_location : Location::Node, context : Schema::Context) : Result?
             # Check if there's a custom validator for this keyword
-            custom_validators = root.configuration.keywords
+            custom_validators = root.configuration.custom_keywords
             if custom_validator = custom_validators[keyword]?
               # Call custom validator: (instance, schema_value, pointer, keyword) -> Bool | Array(String)
               pointer = Location.resolve(instance_location)
