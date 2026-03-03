@@ -111,28 +111,25 @@ describe "Configuration and Infrastructure" do
   end
 
   # ========================
-  # Configuration dup_with validation
+  # Configuration.new validation (mirrors constructor validation)
   # ========================
 
-  describe "Configuration#dup_with validation" do
-    it "raises on invalid output_format in dup_with" do
-      config = JsonSchemer::Configuration.new
+  describe "Configuration.new validation" do
+    it "raises on invalid output_format in Configuration.new" do
       expect_raises(ArgumentError, /Invalid output_format/) do
-        config.dup_with(output_format: "bad")
+        JsonSchemer::Configuration.new(output_format: "bad")
       end
     end
 
-    it "raises on invalid access_mode in dup_with" do
-      config = JsonSchemer::Configuration.new
+    it "raises on invalid access_mode in Configuration.new" do
       expect_raises(ArgumentError, /Invalid access_mode/) do
-        config.dup_with(access_mode: "bad")
+        JsonSchemer::Configuration.new(access_mode: "bad")
       end
     end
 
-    it "raises on invalid max_depth in dup_with" do
-      config = JsonSchemer::Configuration.new
+    it "raises on invalid max_depth in Configuration.new" do
       expect_raises(ArgumentError, /max_depth must be > 0/) do
-        config.dup_with(max_depth: 0)
+        JsonSchemer::Configuration.new(max_depth: 0)
       end
     end
   end
