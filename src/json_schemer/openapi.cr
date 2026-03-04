@@ -21,6 +21,7 @@ module JsonSchemer
       regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
       output_format : String? = nil,
       access_mode : String? = nil,
+      max_depth : Int? = nil,
     )
       @document = document
 
@@ -51,7 +52,8 @@ module JsonSchemer
         ref_resolver: ref_resolver,
         regexp_resolver: regexp_resolver,
         output_format: output_format,
-        access_mode: access_mode
+        access_mode: access_mode,
+        max_depth: max_depth
       )
     end
 
@@ -99,11 +101,11 @@ module JsonSchemer
     # ```
     # user_schema = openapi.ref("#/components/schemas/User")
     # ```
-    def ref(value : String) : Schema
-      @schema.ref(value)
+    def ref(ref_value : String) : Schema
+      @schema.ref(ref_value)
     rescue e : InvalidRefPointer
-      if value.starts_with?("#/")
-        path = value[1..]
+      if ref_value.starts_with?("#/")
+        path = ref_value[1..]
         begin
           target = Hana::Pointer.new(path).eval(JSON::Any.new(@document))
           Schema.new(
