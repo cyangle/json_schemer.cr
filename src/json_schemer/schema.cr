@@ -175,39 +175,45 @@ module JsonSchemer
     # - `root`: The root schema.
     # - `keyword`: The keyword associated with this schema in the parent.
     # - `configuration`: Configuration options.
+    # - `access_mode`: "read" or "write" mode.
     # - `base_uri`: Base URI for resolving references.
-    # - `meta_schema`: Meta-schema to use.
-    # - `vocabulary`: Vocabulary configuration.
-    # - `format`: Enable format assertions (default: false).
-    # - `formats`: Custom format validators.
     # - `content_encodings`: Custom content encoding validators.
     # - `content_media_types`: Custom content media type validators.
-    # - `ref_resolver`: Resolver for external references.
-    # - `regexp_resolver`: Resolver for regex patterns.
+    # - `format`: Enable format assertions (default: false).
+    # - `formats`: Custom format validators.
+    # - `insert_property_defaults`: Insert default values for properties (default: false).
+    # - `custom_keywords`: Custom keyword validators.
+    # - `max_depth`: Maximum recursion depth (default: 100).
+    # - `meta_schema`: Meta-schema to use.
     # - `output_format`: Default output format.
-    # - `access_mode`: "read" or "write" mode.
+    # - `property_default_resolver`: Resolver for property defaults.
+    # - `ref_resolver`: Resolver for external references.
+    # - `regexp_filter`: Filter for regex patterns.
+    # - `regexp_resolver`: Resolver for regex patterns.
+    # - `vocabulary`: Vocabulary configuration.
     def initialize(
       value : JSON::Any | JSONHash | Bool,
       parent : Schema | Keyword | Nil = nil,
       root : Schema? = nil,
       keyword : String? = nil,
       configuration : Configuration? = nil,
+      # Configuration options (override configuration)
+      access_mode : String? = nil,
       base_uri : URI? = nil,
-      meta_schema : Schema | String | Nil = nil,
-      vocabulary : Hash(String, Bool)? = nil,
-      format : Bool? = nil,
-      formats : Hash(String, Format::FormatValidator)? = nil,
       content_encodings : Hash(String, Content::ContentEncodingValidator)? = nil,
       content_media_types : Hash(String, Content::ContentMediaTypeValidator)? = nil,
-      keywords_config : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
+      format : Bool? = nil,
+      formats : Hash(String, Format::FormatValidator)? = nil,
       insert_property_defaults : Bool? = nil,
+      custom_keywords : Hash(String, Proc(JSON::Any, JSON::Any, String, Keyword, Bool | Array(String)))? = nil,
+      max_depth : Int32? = nil,
+      meta_schema : Schema | String | Nil = nil,
+      output_format : String? = nil,
       property_default_resolver : Proc(JSON::Any, String, Array(Tuple(Result, Bool)), Bool)? = nil,
       ref_resolver : Proc(URI, JSONHash?) | String | Nil = nil,
-      regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
-      output_format : String? = nil,
-      access_mode : String? = nil,
-      max_depth : Int32? = nil,
       regexp_filter : Proc(String, Bool)? = nil,
+      regexp_resolver : Proc(String, Regex?) | String | Nil = nil,
+      vocabulary : Hash(String, Bool)? = nil,
     )
       # Step 1: Compute location in the schema tree
       @location = if parent
@@ -245,23 +251,23 @@ module JsonSchemer
                     end
 
       # Step 4: Build merged configuration (explicit args override inherited values)
-      config = base_config.dup_with(
-        base_uri: base_uri.nil? ? UNSET : base_uri,
-        meta_schema: meta_schema.nil? ? UNSET : meta_schema,
-        vocabulary: vocabulary.nil? ? UNSET : vocabulary,
-        format: format.nil? ? UNSET : format,
-        formats: formats.nil? ? UNSET : formats,
-        content_encodings: content_encodings.nil? ? UNSET : content_encodings,
-        content_media_types: content_media_types.nil? ? UNSET : content_media_types,
-        keywords: keywords_config.nil? ? UNSET : keywords_config,
-        insert_property_defaults: insert_property_defaults.nil? ? UNSET : insert_property_defaults,
-        property_default_resolver: property_default_resolver.nil? ? UNSET : property_default_resolver,
-        ref_resolver: ref_resolver.nil? ? UNSET : ref_resolver,
-        regexp_resolver: regexp_resolver.nil? ? UNSET : regexp_resolver,
-        output_format: output_format.nil? ? UNSET : output_format,
-        access_mode: access_mode.nil? ? UNSET : access_mode,
-        max_depth: max_depth.nil? ? UNSET : max_depth,
-        regexp_filter: regexp_filter.nil? ? UNSET : regexp_filter
+      config = Configuration.new(
+        base_uri: base_uri || base_config.base_uri,
+        meta_schema: meta_schema || base_config.meta_schema,
+        vocabulary: vocabulary || base_config.vocabulary,
+        format: format.nil? ? base_config.format : format,
+        formats: formats || base_config.formats,
+        content_encodings: content_encodings || base_config.content_encodings,
+        content_media_types: content_media_types || base_config.content_media_types,
+        custom_keywords: custom_keywords || base_config.custom_keywords,
+        insert_property_defaults: insert_property_defaults.nil? ? base_config.insert_property_defaults : insert_property_defaults,
+        property_default_resolver: property_default_resolver || base_config.property_default_resolver,
+        ref_resolver: ref_resolver || base_config.ref_resolver,
+        regexp_resolver: regexp_resolver || base_config.regexp_resolver,
+        output_format: output_format || base_config.output_format,
+        access_mode: access_mode || base_config.access_mode,
+        max_depth: max_depth || base_config.max_depth,
+        regexp_filter: regexp_filter || base_config.regexp_filter
       )
       @configuration = config
 
@@ -858,7 +864,7 @@ module JsonSchemer
         property_default_resolver: configuration.property_default_resolver,
         vocabulary: configuration.vocabulary,
         format: configuration.format,
-        keywords: configuration.keywords,
+        custom_keywords: configuration.custom_keywords,
         output_format: configuration.output_format,
         access_mode: configuration.access_mode,
         max_depth: configuration.max_depth,
