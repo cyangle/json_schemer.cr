@@ -17,7 +17,7 @@ describe "Custom Keyword Location" do
           }
         }
       }),
-      keywords: custom_keywords
+      custom_keywords: custom_keywords
     )
 
     # 1. Classic format (schema_pointer should point to the schema object)
