@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: shards install
 
+      - name: Build Ameba
+        run: crystal build -o bin/ameba lib/ameba/bin/ameba.cr --progress none
+
       - name: Run Ameba
         run: bin/ameba
 
