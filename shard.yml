@@ -1,5 +1,5 @@
 name: json_schemer
-version: 0.11.0
+version: 0.11.1
 
 authors:
   - Chao Yang <cyang05@outlook.com>
@@ -8,7 +8,7 @@ crystal: '>= 1.19.0'
 
 targets:
   ameba:
-    main: bin/ameba.cr
+    main: lib/ameba/src/ameba.cr
 
 dependencies:
   hana:
