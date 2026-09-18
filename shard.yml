@@ -8,7 +8,7 @@ crystal: '>= 1.19.0'
 
 targets:
   ameba:
-    main: bin/ameba.cr
+    main: lib/ameba/src/ameba.cr
 
 dependencies:
   hana:
