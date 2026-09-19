@@ -60,6 +60,18 @@ module JsonSchemer
     LEAP_SECOND         =  60
     MAX_HOSTNAME_LENGTH = 253
 
+    # Code points that UTS 46 maps or allows but that IDNA2008 (RFC 5892) treats
+    # specially: CONTEXTO, CONTEXTJ and the BackwardCompatible PVALID exceptions.
+    # All of them are valid in an A-label's decoded U-label.
+    IDNA2008_EXCEPTION_CHARS = Set{
+      '\u00B7', '\u0375', '\u05F3', '\u05F4', '\u30FB',           # CONTEXTO
+      '\u200C', '\u200D',                                         # CONTEXTJ
+      '\u00DF', '\u03C2', '\u06FD', '\u06FE', '\u0F0B', '\u3007', # BackwardCompatible / PVALID
+    }
+
+    # Labels are separated by "." or one of the UTS 46 IDN label separators.
+    IDN_LABEL_SEPARATOR_REGEX = /[.\x{3002}\x{FF0E}\x{FF61}]/
+
     # Format validator type
     alias FormatValidator = Proc(JSON::Any, String, Bool)
 
@@ -446,13 +458,33 @@ module JsonSchemer
     # Raises `SimpleIDN::ConversionError` if an ICU system error occurs.
     def self.valid_idn_hostname?(data : String) : Bool
       {% if flag?(:with_simpleidn) %}
-        # Use SimpleIDN's hostname validation
-        SimpleIDN.valid_hostname?(data)
+        return false unless SimpleIDN.valid_hostname?(data)
+        # UTS 46 permits some code points that IDNA2008 disallows (e.g. an A-label
+        # that decodes to punctuation). Decode each A-label and require its code
+        # points to be IDNA2008-valid.
+        data.split(IDN_LABEL_SEPARATOR_REGEX).all? { |label| valid_idna2008_alabel?(label) }
       {% else %}
         Log.warn { "IDN hostname validation skipped because `with_simpleidn` flag is not set, always invalid" }
         false
       {% end %}
     end
+
+    # Validates that an A-label (a label starting with "xn--"), when decoded,
+    # contains only code points allowed by IDNA2008: letters, marks and numbers,
+    # plus the CONTEXT/BackwardCompatible exceptions. This rejects the disallowed
+    # punctuation/symbols that UTS 46 permits. Plain U-labels pass through.
+    {% if flag?(:with_simpleidn) %}
+      private def self.valid_idna2008_alabel?(label : String) : Bool
+        return true unless label.downcase.starts_with?("xn--")
+
+        decoded = SimpleIDN.to_unicode_hostname(label)
+        return false unless decoded
+
+        decoded.each_char.all? do |char|
+          IDNA2008_EXCEPTION_CHARS.includes?(char) || char.letter? || char.mark? || char.number?
+        end
+      end
+    {% end %}
 
     # Validates an email address.
     #
@@ -493,9 +525,12 @@ module JsonSchemer
         return false if local_part.starts_with?('.') || local_part.ends_with?('.')
         return false if local_part.includes?("..")
         if allow_unicode
-          # Allow Unicode letters and common email special chars
+          # RFC 6531: atext =/ UTF8-non-ascii, so every non-ASCII code point is
+          # allowed (no Unicode NFC normalization is required). ASCII characters
+          # must still be valid atext.
           local_part.each_char do |char|
-            unless char.letter? || char.ascii_number? || ".!#$%&'*+/=?^_`{|}~-".includes?(char)
+            next unless char.ascii?
+            unless char.ascii_letter? || char.ascii_number? || ".!#$%&'*+/=?^_`{|}~-".includes?(char)
               return false
             end
           end
