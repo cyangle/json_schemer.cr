@@ -115,4 +115,69 @@ describe "Regex Validation" do
       schema.valid?(JSON.parse(%q({"foo_bar": 1}))).should be_false
     end
   end
+
+  # Regression tests for ECMA-262 conformance gaps found during review.
+  describe "format regex ECMA-262 conformance" do
+    it "rejects PCRE-only group constructs" do
+      schema = JsonSchemer.schema(JSON.parse(%q({"format": "regex"})).as_h)
+      ["(?>a)", "(?R)", "(?0)", "(?|a|b)", "(a)(?(1)b|c)"].each do |pattern|
+        schema.valid?(JSON::Any.new(pattern)).should be_false
+      end
+    end
+
+    it "rejects possessive quantifiers" do
+      schema = JsonSchemer.schema(JSON.parse(%q({"format": "regex"})).as_h)
+      ["a++", "a*+", "a?+", "a{2,3}+"].each do |pattern|
+        schema.valid?(JSON::Any.new(pattern)).should be_false
+      end
+    end
+
+    it "accepts ECMA-262 lazy quantifiers and flag groups" do
+      schema = JsonSchemer.schema(JSON.parse(%q({"format": "regex"})).as_h)
+      ["a*?", "a+?", "a??", "a{1,2}?", "(?i:x)", "(?<name>x)"].each do |pattern|
+        schema.valid?(JSON::Any.new(pattern)).should be_true
+      end
+    end
+
+    it "accepts variable-width lookbehind patterns that ECMA-262 allows" do
+      schema = JsonSchemer.schema(JSON.parse(%q({"format": "regex"})).as_h)
+      ["(?<=a+)b", "(?<=ab+)c", "(?<=x\\w+)", "(?<=a*b)", "(?<=a{200,}b+)", "(?<=a{256,})b"].each do |pattern|
+        schema.valid?(JSON::Any.new(pattern)).should be_true
+      end
+    end
+
+    it "treats an empty character class as never matching" do
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({"not": {"pattern": "[]x]"}})).as_h,
+        regexp_resolver: "ecma"
+      )
+      schema.valid?(JSON::Any.new("x")).should be_true
+      schema.valid?(JSON::Any.new("]")).should be_true
+
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({"not": {"pattern": "[]]"}})).as_h,
+        regexp_resolver: "ecma"
+      )
+      schema.valid?(JSON::Any.new("]")).should be_true
+    end
+
+    it "treats [^] as matching any character when followed by another class" do
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({"not": {"pattern": "[^][a-z]"}})).as_h,
+        regexp_resolver: "ecma"
+      )
+      # [^][a-z] requires two characters, so a single character never matches.
+      schema.valid?(JSON::Any.new("5")).should be_true
+      schema.valid?(JSON::Any.new("a")).should be_true
+    end
+
+    it "does not rewrite lookbehind-like text inside a character class" do
+      schema = JsonSchemer.schema(
+        JSON.parse(%q({"pattern": "[(?<=a+)]"})).as_h,
+        regexp_resolver: "ecma"
+      )
+      # The class contains a literal '+', so it must still match it.
+      schema.valid?(JSON::Any.new("+")).should be_true
+    end
+  end
 end

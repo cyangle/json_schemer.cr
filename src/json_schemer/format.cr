@@ -10,16 +10,39 @@ module JsonSchemer
     HOUR_24_REGEX               = /#{DATE_TIME_SEPARATOR_CLASS}24:/
     LEAP_SECOND_REGEX           = /#{DATE_TIME_SEPARATOR_CLASS}\d{2}:\d{2}:6/
     IP_REGEX                    = /\A[0-9a-fA-F:.]+\z/
-    INVALID_QUERY_REGEX         = /\s/
     IRI_ESCAPE_REGEX            = /[^\x00-\x7F]/
     UUID_REGEX                  = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
     NIL_UUID                    = "00000000-0000-0000-0000-000000000000"
     JSON_POINTER_REGEX          = /\A(\/([^~\/]|~[01])*)*\z/
     RELATIVE_JSON_POINTER_REGEX = /\A(0|[1-9]\d*)(#|(\/([^~\/]|~[01])*)*)\z/
-    DURATION_REGEX              = /\AP(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?\z/
-    HOSTNAME_REGEX              = /\A([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\z/
-    EMAIL_REGEX                 = /\A[^\s@]+@[^\s@]+\z/
-    URI_TEMPLATE_REGEX          = /\A([^\{\}]|\{[^\{\}]+\})*\z/
+    # RFC 3339 duration: integer components only (no fractional seconds), ordering constraints
+    # are enforced in `valid_duration?`.
+    DURATION_REGEX = /\AP([0-9]+Y)?([0-9]+M)?([0-9]+W)?([0-9]+D)?(T([0-9]+H)?([0-9]+M)?([0-9]+S)?)?\z/
+    HOSTNAME_REGEX = /\A([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\z/
+    EMAIL_REGEX    = /\A[^\s@]+@[^\s@]+\z/
+
+    # RFC 6570 URI Template grammar
+    URI_TEMPLATE_PCT_ENCODED = "%[0-9A-Fa-f]{2}"
+    URI_TEMPLATE_VARCHAR     = "(?:[A-Za-z0-9_]|#{URI_TEMPLATE_PCT_ENCODED})"
+    URI_TEMPLATE_VARNAME     = "(?:#{URI_TEMPLATE_VARCHAR}+(?:\\.(?:#{URI_TEMPLATE_VARCHAR})+)*)"
+    URI_TEMPLATE_VARSPEC     = "(?:#{URI_TEMPLATE_VARNAME}(?:\\*|:[1-9][0-9]{0,3})?)"
+    # RFC 6570 operator, including the reserved operators (= , ! @ |) from op-reserve.
+    URI_TEMPLATE_EXPRESSION = "\\{[+#./;?&=,!@|]?#{URI_TEMPLATE_VARSPEC}(?:,#{URI_TEMPLATE_VARSPEC})*\\}"
+    # RFC 6570 literals plus ucschar / iprivate. The apostrophe (0x27) is accepted
+    # even though RFC 6570's ABNF omits it, because the JSON Schema test suite
+    # requires it to be valid.
+    URI_TEMPLATE_CHAR = "[\\x21\\x23-\\x24\\x26-\\x3B\\x3D\\x3F-\\x5B\\x5D\\x5F\\x61-\\x7A\\x7E" +
+                        "\\x{A0}-\\x{D7FF}" +
+                        "\\x{E000}-\\x{F8FF}" +
+                        "\\x{F900}-\\x{FDCF}\\x{FDF0}-\\x{FFEF}" +
+                        "\\x{10000}-\\x{1FFFD}\\x{20000}-\\x{2FFFD}\\x{30000}-\\x{3FFFD}" +
+                        "\\x{40000}-\\x{4FFFD}\\x{50000}-\\x{5FFFD}\\x{60000}-\\x{6FFFD}" +
+                        "\\x{70000}-\\x{7FFFD}\\x{80000}-\\x{8FFFD}\\x{90000}-\\x{9FFFD}" +
+                        "\\x{A0000}-\\x{AFFFD}\\x{B0000}-\\x{BFFFD}\\x{C0000}-\\x{CFFFD}" +
+                        "\\x{D0000}-\\x{DFFFD}" +
+                        "\\x{E1000}-\\x{EFFFD}" +
+                        "\\x{F0000}-\\x{FFFFD}\\x{100000}-\\x{10FFFD}]"
+    URI_TEMPLATE_REGEX = /\A(?:#{URI_TEMPLATE_CHAR}|#{URI_TEMPLATE_PCT_ENCODED}|#{URI_TEMPLATE_EXPRESSION})*\z/
 
     # RFC 3339 date format: YYYY-MM-DD (exactly 4-digit year, 2-digit month, 2-digit day)
     DATE_REGEX = /\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/
@@ -161,11 +184,20 @@ module JsonSchemer
         return false unless RegexpHelper.matches?(/\AP[0-9]+W\z/, data)
       end
 
-      # If there's a T, make sure there's content after it
-      if data.includes?("T")
-        time_part = data.split("T").last
+      date_part = data
+      time_part = ""
+      if t_index = data.index('T')
+        # If there's a T, make sure there's content after it
+        time_part = data[(t_index + 1)..]? || ""
         return false if time_part.empty?
+        date_part = data[0, t_index]
       end
+
+      # RFC 3339 ordering constraints: years may not be followed by days unless
+      # months are present ("P1Y2D"), and hours may not be followed by seconds
+      # unless minutes are present ("PT1H2S").
+      return false if date_part.includes?('Y') && date_part.includes?('D') && !date_part.includes?('M')
+      return false if time_part.includes?('H') && time_part.includes?('S') && !time_part.includes?('M')
 
       true
     end
@@ -188,8 +220,38 @@ module JsonSchemer
     # Characters disallowed in URIs per RFC 3986
     # These must be percent-encoded (note: [] allowed in host for IPv6)
     URI_DISALLOWED_CHARS = /[\x00-\x20\x7F<>"{}|\\^`]/
-    # Brackets are only allowed in the host portion for IPv6
-    URI_BRACKET_IN_USERINFO = /\/\/[^\/@]*[\[\]][^\/@]*@/
+
+    # A '%' must always introduce a complete "%XX" triplet
+    INVALID_PERCENT_ENCODING_REGEX = /%(?![0-9A-Fa-f]{2})/
+
+    # RFC 3986 character classes
+    URI_PCT_ENCODED = "%[0-9A-Fa-f]{2}"
+    URI_UNRESERVED  = "[A-Za-z0-9\\-._~]"
+    # sub-delims = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+    URI_SUB_DELIMS = "[!$&'()*+,;=]"
+
+    # pchar, and the same without ":" (for the first segment of a relative-path reference).
+    URI_SEG_CHAR = "(?:#{URI_UNRESERVED}|#{URI_SUB_DELIMS}|[:@]|#{URI_PCT_ENCODED})"
+    URI_SEG_NC   = "(?:#{URI_UNRESERVED}|#{URI_SUB_DELIMS}|[@]|#{URI_PCT_ENCODED})"
+
+    # scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+    URI_SCHEME_REGEX = /\A[A-Za-z][A-Za-z0-9+\-.]*:/
+
+    URI_PATH_ABEMPTY_REGEX  = /\A(?:\/#{URI_SEG_CHAR}*)*\z/
+    URI_PATH_SCHEME_REGEX   = /\A(?:#{URI_SEG_CHAR}+(?:\/#{URI_SEG_CHAR}*)*|(?:\/#{URI_SEG_CHAR}*)*)\z/
+    URI_PATH_NOSCHEME_REGEX = /\A(?:#{URI_SEG_NC}+(?:\/#{URI_SEG_CHAR}*)*|(?:\/#{URI_SEG_CHAR}*)*)\z/
+    # query = *( pchar / "/" / "?" ); a fragment has the same grammar.
+    URI_QUERY_REGEX    = /\A(?:#{URI_SEG_CHAR}|\/|\?)*\z/
+    URI_FRAGMENT_REGEX = URI_QUERY_REGEX
+
+    URI_USERINFO_REGEX = /\A(?:#{URI_UNRESERVED}|#{URI_SUB_DELIMS}|[:]|#{URI_PCT_ENCODED})*\z/
+    URI_REG_NAME_REGEX = /\A(?:#{URI_UNRESERVED}|#{URI_SUB_DELIMS}|#{URI_PCT_ENCODED})*\z/
+
+    # IPv4 octet without leading zeros (leading zeros are ambiguous / forbidden)
+    URI_IPV4_OCTET      = "(?:0|[1-9][0-9]?|1[0-9]{2}|2[0-4][0-9]|25[0-5])"
+    URI_IPV4_REGEX      = /\A#{URI_IPV4_OCTET}(?:\.#{URI_IPV4_OCTET}){3}\z/
+    URI_H16_REGEX       = /\A[0-9A-Fa-f]{1,4}\z/
+    URI_IPVFUTURE_REGEX = /\Av[0-9A-Fa-f]+\.[A-Za-z0-9\-._~!$&'()*+,;=:]+\z/
 
     # Validates a URI string according to RFC 3986.
     def self.valid_uri?(data : String) : Bool
@@ -201,24 +263,146 @@ module JsonSchemer
       validate_uri_structure(data, require_scheme: false)
     end
 
-    # Shared URI/URI-reference validation.
+    # Shared URI/URI-reference validation following the RFC 3986 grammar.
     # The only difference is whether a non-empty scheme is required.
     private def self.validate_uri_structure(data : String, require_scheme : Bool) : Bool
       return false unless data.ascii_only?
       return false if RegexpHelper.matches?(URI_DISALLOWED_CHARS, data)
-      return false if RegexpHelper.matches?(URI_BRACKET_IN_USERINFO, data)
-      begin
-        uri = URI.parse(data)
-        return false if RegexpHelper.matches?(INVALID_QUERY_REGEX, uri.query || "")
-        if require_scheme
-          scheme = uri.scheme
-          !scheme.nil? && !scheme.empty?
-        else
-          true
-        end
-      rescue ex : URI::Error
-        false
+      return false if RegexpHelper.matches?(INVALID_PERCENT_ENCODING_REGEX, data)
+
+      rest = data
+      has_scheme = false
+      if match = rest.match(URI_SCHEME_REGEX)
+        has_scheme = true
+        rest = rest[match[0].size..]? || ""
+      elsif require_scheme
+        return false
       end
+
+      has_authority = false
+      if rest.starts_with?("//")
+        has_authority = true
+        authority_end = rest.size
+        {'/', '?', '#'}.each do |char|
+          if (index = rest.index(char, 2)) && index < authority_end
+            authority_end = index
+          end
+        end
+        return false unless valid_uri_authority?(rest[2...authority_end])
+        rest = rest[authority_end..]? || ""
+      end
+
+      fragment = nil
+      if index = rest.index('#')
+        fragment = rest[(index + 1)..]? || ""
+        rest = rest[0...index]
+      end
+      query = nil
+      if index = rest.index('?')
+        query = rest[(index + 1)..]? || ""
+        rest = rest[0...index]
+      end
+
+      path_ok =
+        if has_authority
+          RegexpHelper.matches?(URI_PATH_ABEMPTY_REGEX, rest)
+        elsif has_scheme
+          RegexpHelper.matches?(URI_PATH_SCHEME_REGEX, rest)
+        else
+          RegexpHelper.matches?(URI_PATH_NOSCHEME_REGEX, rest)
+        end
+      return false unless path_ok
+
+      if query
+        return false unless RegexpHelper.matches?(URI_QUERY_REGEX, query)
+      end
+      if fragment
+        return false unless RegexpHelper.matches?(URI_FRAGMENT_REGEX, fragment)
+      end
+
+      true
+    end
+
+    # Validates the authority component: [userinfo "@"] host [":" port]
+    private def self.valid_uri_authority?(authority : String) : Bool
+      rest = authority
+      if index = rest.index('@')
+        return false unless RegexpHelper.matches?(URI_USERINFO_REGEX, rest[0...index])
+        rest = rest[(index + 1)..]? || ""
+      end
+
+      host =
+        if rest.starts_with?('[')
+          close = rest.index(']')
+          return false unless close
+          remainder = rest[(close + 1)..]? || ""
+          # Only an optional numeric port may follow the bracketed IP literal
+          unless remainder.empty? || (remainder[0]? == ':' && RegexpHelper.matches?(/\A[0-9]*\z/, remainder[1..]? || ""))
+            return false
+          end
+          rest[0..close]
+        elsif index = rest.index(':')
+          port = rest[(index + 1)..]? || ""
+          return false unless RegexpHelper.matches?(/\A[0-9]*\z/, port)
+          rest[0...index]
+        else
+          rest
+        end
+
+      valid_uri_host?(host)
+    end
+
+    # Validates a host: bracketed IP literal (strict IPv6 / IPvFuture) or reg-name.
+    private def self.valid_uri_host?(host : String) : Bool
+      if host.starts_with?('[')
+        return false unless host.ends_with?(']')
+        inner = host[1...-1]
+        return true if RegexpHelper.matches?(URI_IPVFUTURE_REGEX, inner)
+        valid_ipv6_address?(inner)
+      else
+        RegexpHelper.matches?(URI_REG_NAME_REGEX, host)
+      end
+    end
+
+    # Strict RFC 3986 IPv6 address validation.
+    # Unlike Socket::IPAddress, this rejects leading zeros in embedded IPv4
+    # addresses (e.g. "::ffff:192.168.0.01").
+    private def self.valid_ipv6_address?(address : String) : Bool
+      groups = 0
+
+      if index = address.index("::")
+        # Only one "::" allowed, including overlapping occurrences (":::")
+        remainder = address[(index + 1)..]? || ""
+        return false if remainder.includes?("::")
+        head = index == 0 ? "" : address[0, index]
+        # An embedded IPv4 address (ls32) may only be the least significant 32 bits,
+        # so it can never appear before the elision.
+        return false if head.includes?('.')
+        tail = index + 2 >= address.size ? "" : address[(index + 2)..]? || ""
+        fields = (head.empty? ? [] of String : head.split(':', remove_empty: false)) +
+                 (tail.empty? ? [] of String : tail.split(':', remove_empty: false))
+        return false if fields.any? &.empty?
+        max_groups = 7 # "::" must stand in for at least one group of zeros
+      else
+        fields = address.split(':', remove_empty: false)
+        return false if fields.any? &.empty?
+        max_groups = 8
+      end
+
+      last_index = fields.size - 1
+      fields.each_with_index do |field, i|
+        if field.includes?('.')
+          # An embedded IPv4 address is only allowed as the final group
+          return false unless i == last_index
+          return false unless RegexpHelper.matches?(URI_IPV4_REGEX, field)
+          groups += 2
+        else
+          return false unless RegexpHelper.matches?(URI_H16_REGEX, field)
+          groups += 1
+        end
+      end
+
+      max_groups == 8 ? groups == max_groups : groups <= max_groups
     end
 
     # IRI escape
@@ -328,10 +512,10 @@ module JsonSchemer
     # when true, validates as IDN hostname.
     private def self.validate_domain_part(domain_part : String, allow_unicode : Bool) : Bool
       if domain_part.starts_with?('[') && domain_part.ends_with?(']')
-        # IP address literal
+        # IP address literal; the "IPv6:" tag is case-insensitive per RFC 5321
         ip_literal = domain_part[1...-1]
-        if ip_literal.starts_with?("IPv6:")
-          valid_ip?(ip_literal[5..], Socket::Family::INET6)
+        if match = ip_literal.match(/\Aipv6:/i)
+          valid_ip?(ip_literal[match[0].size..]? || "", Socket::Family::INET6)
         else
           valid_ip?(ip_literal, Socket::Family::INET)
         end
