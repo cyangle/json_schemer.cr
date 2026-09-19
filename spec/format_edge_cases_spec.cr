@@ -212,9 +212,10 @@ describe "Format Edge Cases" do
       schema.valid?(JSON::Any.new("P1Y2M3DT4H5M6S")).should be_true
     end
 
-    it "accepts duration with fractional seconds (PT0.5S)" do
+    it "rejects duration with fractional seconds (PT0.5S)" do
+      # RFC 3339 Appendix A ABNF does not allow fractional durations
       schema = JsonSchemer.schema({"format" => JSON::Any.new("duration")}, format: true)
-      schema.valid?(JSON::Any.new("PT0.5S")).should be_true
+      schema.valid?(JSON::Any.new("PT0.5S")).should be_false
     end
 
     it "accepts zero duration (P0D)" do
@@ -531,6 +532,41 @@ describe "Format Edge Cases" do
       schema.valid?(JSON::Any.new("http://user:pass@example.com")).should be_true
     end
 
+    it "accepts a slash in a query (RFC 3986 query = *( pchar / \"/\" / \"?\" ))" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
+      schema.valid?(JSON::Any.new("http://example.com/path?q=a/b")).should be_true
+      schema.valid?(JSON::Any.new("http://example.com/?x=/y/z")).should be_true
+      schema.valid?(JSON::Any.new("http://example.com/a=1&b=http://x/y")).should be_true
+    end
+
+    it "accepts a slash in a fragment" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
+      schema.valid?(JSON::Any.new("http://example.com/#/route")).should be_true
+      schema.valid?(JSON::Any.new("http://example.com/#foo/bar")).should be_true
+    end
+
+    it "accepts an IPvFuture host containing sub-delimiter parentheses" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
+      schema.valid?(JSON::Any.new("http://[v1.a(b)]/")).should be_true
+    end
+
+    it "rejects an embedded IPv4 address before the elision (RFC 3986 ls32 must be last)" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
+      schema.valid?(JSON::Any.new("http://[192.168.1.1::]/")).should be_false
+      schema.valid?(JSON::Any.new("http://[192.168.1.1::1]/")).should be_false
+    end
+
+    it "accepts an embedded IPv4 address at the end of an address containing ::" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
+      schema.valid?(JSON::Any.new("http://[::ffff:192.168.1.1]/")).should be_true
+      schema.valid?(JSON::Any.new("http://[1::192.168.1.1]/")).should be_true
+    end
+
+    it "accepts a long valid URI without raising" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
+      schema.valid?(JSON::Any.new("http://example.com/" + ("a" * 100_000))).should be_true
+    end
+
     # Invalid URI cases
     it "rejects URI without scheme (example.com)" do
       schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
@@ -566,6 +602,21 @@ describe "Format Edge Cases" do
     it "non-string types pass uri format validation" do
       schema = JsonSchemer.schema({"format" => JSON::Any.new("uri")}, format: true)
       schema.valid?(JSON::Any.new(123_i64)).should be_true
+    end
+  end
+
+  # ==================== URI-REFERENCE EDGE CASES ====================
+  describe "uri-reference format edge cases" do
+    it "accepts a slash in a query" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-reference")}, format: true)
+      schema.valid?(JSON::Any.new("?q=1/2")).should be_true
+      schema.valid?(JSON::Any.new("http://example.com/?a=1/2")).should be_true
+    end
+
+    it "accepts a slash in a fragment" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-reference")}, format: true)
+      schema.valid?(JSON::Any.new("#frag/x")).should be_true
+      schema.valid?(JSON::Any.new("http://example.com/#/route")).should be_true
     end
   end
 
@@ -808,6 +859,34 @@ describe "Format Edge Cases" do
     it "accepts simple URI (http://example.com/)" do
       schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-template")}, format: true)
       schema.valid?(JSON::Any.new("http://example.com/")).should be_true
+    end
+
+    it "accepts the RFC 6570 reserved operators" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-template")}, format: true)
+      ["{=var}", "{!var}", "{@var}", "{|var}"].each do |template|
+        schema.valid?(JSON::Any.new(template)).should be_true
+      end
+    end
+
+    it "accepts ucschar and iprivate literals" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-template")}, format: true)
+      schema.valid?(JSON::Any.new("a\u{1F600}b")).should be_true # supplementary plane (ucschar)
+      schema.valid?(JSON::Any.new("a\u{E000}b")).should be_true  # private use (iprivate)
+    end
+
+    it "accepts an apostrophe in a literal (JSON Schema test suite requirement)" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-template")}, format: true)
+      schema.valid?(JSON::Any.new("a'b")).should be_true
+    end
+
+    it "rejects a Unicode noncharacter in a literal" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-template")}, format: true)
+      schema.valid?(JSON::Any.new("a\uFFFEb")).should be_false
+    end
+
+    it "handles a long literal without raising" do
+      schema = JsonSchemer.schema({"format" => JSON::Any.new("uri-template")}, format: true)
+      schema.valid?(JSON::Any.new(("a" * 100_000) + "{")).should be_false
     end
 
     # Invalid URI Template cases

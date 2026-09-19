@@ -137,6 +137,25 @@ describe "Format Validation" do
         schema = JsonSchemer.schema(JSON.parse(%q({"format": "idn-email"})).as_h)
         schema.valid?(JSON::Any.new("test@example.com")).should be_true
       end
+
+      it "accepts non-ASCII code points in the idn-email local part (RFC 6531 UTF8-non-ascii)" do
+        schema = JsonSchemer.schema(JSON.parse(%q({"format": "idn-email"})).as_h)
+        schema.valid?(JSON::Any.new("cafe\u0301@example.com")).should be_true
+        schema.valid?(JSON::Any.new("\u0085@example.com")).should be_true
+        schema.valid?(JSON::Any.new("\uFFFF@example.com")).should be_true
+        schema.valid?(JSON::Any.new("\u{1D54F}@example.com")).should be_true
+      end
+
+      it "rejects idn-hostname A-labels that decode to an IDNA2008-disallowed code point" do
+        schema = JsonSchemer.schema(JSON.parse(%q({"format": "idn-hostname"})).as_h)
+        schema.valid?(JSON::Any.new("xn--7a")).should be_false
+      end
+
+      it "accepts valid idn-hostname A-labels" do
+        schema = JsonSchemer.schema(JSON.parse(%q({"format": "idn-hostname"})).as_h)
+        schema.valid?(JSON::Any.new("xn--NXASMQ6B")).should be_true
+        schema.valid?(JSON::Any.new("xn--mnchen-3ya.de")).should be_true
+      end
     {% end %}
 
     it "supports iri format" do
